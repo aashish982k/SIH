@@ -1,0 +1,208 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+/* ─── NWIS Design Tokens ────────────────────────────────────────────────────── */
+:root {
+  /* Brand colors (mapped to shadcn CSS variables) */
+  --background:           oklch(0.979 0.003 247);   /* #F8FAFC */
+  --foreground:           oklch(0.130 0.025 264);   /* #0F172A */
+  --card:                 oklch(1 0 0);              /* #FFFFFF */
+  --card-foreground:      oklch(0.130 0.025 264);
+  --popover:              oklch(1 0 0);
+  --popover-foreground:   oklch(0.130 0.025 264);
+
+  /* Primary: OIL deep navy #0F4C81 */
+  --primary:              oklch(0.352 0.112 250);
+  --primary-foreground:   oklch(0.985 0 0);
+
+  /* Secondary: teal accent #2E86AB */
+  --secondary:            oklch(0.548 0.099 229);
+  --secondary-foreground: oklch(0.985 0 0);
+
+  --muted:                oklch(0.944 0.006 247);   /* #E2E8F0 */
+  --muted-foreground:     oklch(0.491 0.021 256);   /* #64748B */
+  --accent:               oklch(0.920 0.020 250);
+  --accent-foreground:    oklch(0.352 0.112 250);
+  --destructive:          oklch(0.534 0.207 26);    /* #DC2626 high risk */
+  --border:               oklch(0.813 0.018 252);   /* #CBD5E1 */
+  --input:                oklch(0.813 0.018 252);
+  --ring:                 oklch(0.352 0.112 250);
+
+  /* Border radii per README spec */
+  --radius: 0.875rem;   /* 14px cards */
+
+  /* Risk severity colors */
+  --risk-low:             oklch(0.527 0.163 145);   /* #16A34A */
+  --risk-medium:          oklch(0.627 0.162 55);    /* #D97706 */
+  --risk-high:            oklch(0.534 0.207 26);    /* #DC2626 */
+  --risk-critical:        oklch(0.482 0.228 291);   /* #7C3AED */
+
+  /* Chart palette (drilling domain colors) */
+  --chart-1: oklch(0.548 0.099 229);   /* secondary teal */
+  --chart-2: oklch(0.527 0.163 145);   /* green */
+  --chart-3: oklch(0.627 0.162 55);    /* amber */
+  --chart-4: oklch(0.534 0.207 26);    /* red */
+  --chart-5: oklch(0.482 0.228 291);   /* purple */
+
+  /* Sidebar (matches card) */
+  --sidebar:                    oklch(0.970 0.004 247);
+  --sidebar-foreground:         oklch(0.130 0.025 264);
+  --sidebar-primary:            oklch(0.352 0.112 250);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent:             oklch(0.920 0.020 250);
+  --sidebar-accent-foreground:  oklch(0.352 0.112 250);
+  --sidebar-border:             oklch(0.813 0.018 252);
+  --sidebar-ring:               oklch(0.352 0.112 250);
+}
+
+@theme inline {
+  --color-background:           var(--background);
+  --color-foreground:           var(--foreground);
+  --color-card:                 var(--card);
+  --color-card-foreground:      var(--card-foreground);
+  --color-popover:              var(--popover);
+  --color-popover-foreground:   var(--popover-foreground);
+  --color-primary:              var(--primary);
+  --color-primary-foreground:   var(--primary-foreground);
+  --color-secondary:            var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted:                var(--muted);
+  --color-muted-foreground:     var(--muted-foreground);
+  --color-accent:               var(--accent);
+  --color-accent-foreground:    var(--accent-foreground);
+  --color-destructive:          var(--destructive);
+  --color-border:               var(--border);
+  --color-input:                var(--input);
+  --color-ring:                 var(--ring);
+  --color-chart-1:              var(--chart-1);
+  --color-chart-2:              var(--chart-2);
+  --color-chart-3:              var(--chart-3);
+  --color-chart-4:              var(--chart-4);
+  --color-chart-5:              var(--chart-5);
+  --color-sidebar:              var(--sidebar);
+  --color-sidebar-foreground:   var(--sidebar-foreground);
+  --color-sidebar-primary:      var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent:       var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border:       var(--sidebar-border);
+  --color-sidebar-ring:         var(--sidebar-ring);
+
+  /* Risk colors as Tailwind tokens */
+  --color-risk-low:      var(--risk-low);
+  --color-risk-medium:   var(--risk-medium);
+  --color-risk-high:     var(--risk-high);
+  --color-risk-critical: var(--risk-critical);
+
+  --radius-sm:  calc(var(--radius) * 0.5);   /* ~7px buttons/inputs */
+  --radius-md:  calc(var(--radius) * 0.7);   /* ~10px */
+  --radius-lg:  var(--radius);               /* 14px cards */
+  --radius-xl:  calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+}
+
+/* ─── Base Layer ────────────────────────────────────────────────────────────── */
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    box-sizing: border-box;
+  }
+
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    min-height: 100vh;
+  }
+
+  /* Monospace for depth values, coordinates, technical numbers */
+  .font-mono,
+  [data-depth],
+  [data-coords] {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+/* ─── Utility Classes ───────────────────────────────────────────────────────── */
+@layer utilities {
+  /* Risk severity system — used across all pages consistently */
+  .risk-low      { color: var(--risk-low); }
+  .risk-medium   { color: var(--risk-medium); }
+  .risk-high     { color: var(--risk-high); }
+  .risk-critical { color: var(--risk-critical); }
+
+  .bg-risk-low      { background-color: color-mix(in oklch, var(--risk-low) 12%, transparent); }
+  .bg-risk-medium   { background-color: color-mix(in oklch, var(--risk-medium) 12%, transparent); }
+  .bg-risk-high     { background-color: color-mix(in oklch, var(--risk-high) 12%, transparent); }
+  .bg-risk-critical { background-color: color-mix(in oklch, var(--risk-critical) 12%, transparent); }
+
+  .border-risk-low      { border-color: var(--risk-low); }
+  .border-risk-medium   { border-color: var(--risk-medium); }
+  .border-risk-high     { border-color: var(--risk-high); }
+  .border-risk-critical { border-color: var(--risk-critical); }
+
+  /* Subtle card hover lift */
+  .card-hover {
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+  }
+  .card-hover:hover {
+    box-shadow: 0 8px 24px -4px rgba(15, 76, 129, 0.12), 0 2px 8px -2px rgba(15, 76, 129, 0.08);
+    transform: translateY(-1px);
+  }
+
+  /* Pulsing "live" dot for real-time indicators */
+  .pulse-live {
+    animation: pulse-live 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  @keyframes pulse-live {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* Alert new-arrival flash */
+  .alert-flash {
+    animation: alert-flash 0.6s ease-out;
+  }
+  @keyframes alert-flash {
+    0% { background-color: color-mix(in oklch, var(--risk-high) 20%, transparent); }
+    100% { background-color: transparent; }
+  }
+
+  /* Mapbox popup override */
+  .mapboxgl-popup-content {
+    padding: 0 !important;
+    border-radius: 14px !important;
+    box-shadow: 0 4px 24px -4px rgba(15, 76, 129, 0.2) !important;
+    border: 1px solid hsl(213 33% 88%) !important;
+    overflow: hidden;
+  }
+  .mapboxgl-popup-tip { display: none !important; }
+  .mapboxgl-ctrl-logo { display: none !important; }
+}
+
+/* ─── Scrollbar Styling ─────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: oklch(0.813 0.018 252);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.634 0.040 252);
+}
