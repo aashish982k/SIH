@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { pool } from '../src/config/db';
+
 import { seedUsers } from '../database/seeds/01_users';
 import { seedWells } from '../database/seeds/02_wells';
 import { seedFormations } from '../database/seeds/03_formations';
@@ -30,7 +30,7 @@ async function runSeeds(): Promise<void> {
     console.error('❌  Seed failed:', err.message);
     process.exit(1);
   } finally {
-    await pool.end();
+    process.exit(0);
   }
 }
 

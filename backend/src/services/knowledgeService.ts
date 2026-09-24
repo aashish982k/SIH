@@ -1,5 +1,7 @@
 import { searchSimilar } from './qdrantService';
-import { query } from '../config/db';
+import { eq, getTableColumns } from 'drizzle-orm';
+import { db } from '../db';
+import { knowledge_chunks, wells } from '../db/schema';
 
 export class KnowledgeService {
   /**
@@ -22,16 +24,16 @@ export class KnowledgeService {
    * Fetch a specific chunk
    */
   public async getChunkById(chunkId: string): Promise<any> {
-    const chunks = await query(
-      `SELECT kc.*, w.name AS well_name FROM knowledge_chunks kc
-       LEFT JOIN wells w ON kc.well_id = w.id
-       WHERE kc.id = ?`,
-      [chunkId]
-    );
-    if (!chunks || (chunks as any[]).length === 0) {
-      return null;
-    }
-    return (chunks as any[])[0];
+    const [chunk] = await db.select({
+      ...getTableColumns(knowledge_chunks),
+      well_name: wells.name,
+    })
+      .from(knowledge_chunks)
+      .leftJoin(wells, eq(knowledge_chunks.well_id, wells.id))
+      .where(eq(knowledge_chunks.id, chunkId))
+      .limit(1);
+
+    return chunk ?? null;
   }
 }
 

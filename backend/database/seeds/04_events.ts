@@ -1,4 +1,5 @@
-import { query } from '../../src/config/db';
+import { sql } from 'drizzle-orm';
+import { db } from '../../src/db';
 import { WELL_IDS } from './02_wells';
 import { FORMATION_IDS } from './03_formations';
 
@@ -195,20 +196,16 @@ export async function seedEvents(): Promise<void> {
   ];
 
   for (const e of events) {
-    await query(
-      `INSERT IGNORE INTO operational_events
+    await db.execute(sql`
+      INSERT IGNORE INTO operational_events
         (id, well_id, formation_id, event_type, severity, start_depth_ft, end_depth_ft,
          description, cause, impact, mitigation, lessons_learned, outcome,
          duration_hours, npt_hours, occurred_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [
-        e.id, e.well_id, e.formation_id ?? null, e.event_type, e.severity,
-        e.start_depth_ft, e.end_depth_ft ?? null,
-        e.description, e.cause ?? null, e.impact ?? null,
-        e.mitigation ?? null, e.lessons_learned ?? null, e.outcome ?? null,
-        e.duration_hours ?? null, e.npt_hours ?? null, e.occurred_at,
-      ]
-    );
+       VALUES (${e.id}, ${e.well_id}, ${e.formation_id ?? null}, ${e.event_type}, ${e.severity},
+               ${e.start_depth_ft}, ${e.end_depth_ft ?? null}, ${e.description}, ${e.cause ?? null},
+               ${e.impact ?? null}, ${e.mitigation ?? null}, ${e.lessons_learned ?? null},
+               ${e.outcome ?? null}, ${e.duration_hours ?? null}, ${e.npt_hours ?? null}, ${e.occurred_at})
+    `);
   }
 
   console.log(`  ✔ Seeded ${events.length} operational events`);

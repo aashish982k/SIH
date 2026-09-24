@@ -1,4 +1,5 @@
-import { query } from '../../src/config/db';
+import { sql } from 'drizzle-orm';
+import { db } from '../../src/db';
 
 export const WELL_IDS = {
   NAHARKATIA_A1: '10000000-0000-0000-0000-000000000001',
@@ -144,17 +145,14 @@ export async function seedWells(): Promise<void> {
   ];
 
   for (const w of wells) {
-    await query(
-      `INSERT IGNORE INTO wells
+    await db.execute(sql`
+      INSERT IGNORE INTO wells
         (id, name, well_number, field_name, block, operator, latitude, longitude,
          elevation_m, total_depth_ft, status, spud_date, completion_date, primary_formation)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [
-        w.id, w.name, w.well_number, w.field_name, w.block, w.operator,
-        w.latitude, w.longitude, w.elevation_m, w.total_depth_ft,
-        w.status, w.spud_date, w.completion_date, w.primary_formation,
-      ]
-    );
+       VALUES (${w.id}, ${w.name}, ${w.well_number}, ${w.field_name}, ${w.block}, ${w.operator},
+               ${w.latitude}, ${w.longitude}, ${w.elevation_m}, ${w.total_depth_ft},
+               ${w.status}, ${w.spud_date}, ${w.completion_date}, ${w.primary_formation})
+    `);
   }
 
   console.log(`  ✔ Seeded ${wells.length} wells`);

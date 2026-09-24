@@ -35,3 +35,27 @@ export async function getReport(req: AuthRequest, res: Response, next: NextFunct
     sendSuccess(res, { report });
   } catch (err) { next(err); }
 }
+
+export async function getReportStatus(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const report = await reportService.getReportById(req.params.id, req.user!.id);
+    if (!report) { sendError(res, 'Report not found', 404); return; }
+    sendSuccess(res, {
+      id: report.id,
+      status: report.status,
+      processing_error: report.processing_error,
+      processing_checkpoint: report.processing_checkpoint,
+      message: report.status === 'processed'
+        ? 'Document extracted, indexed, and available in Knowledge.'
+        : report.status === 'failed'
+          ? report.processing_error ?? 'Document processing failed'
+          : 'Document is being extracted and indexed.',
+    });
+  } catch (err) { next(err); }
+}
+
+export async function getGlobalReportStats(_req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    sendSuccess(res, { stats: await reportService.getGlobalReportStats() });
+  } catch (err) { next(err); }
+}

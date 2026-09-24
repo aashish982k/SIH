@@ -1,0 +1,14 @@
+numpy>=1.26,<3
+pandas>=2.1,<3
+scikit-learn>=1.4,<2
+joblib>=1.3,<2
+fastapi>=0.110,<1
+uvicorn[standard]>=0.29,<1
+pydantic>=2.6,<3
+
+# Optional reranker (cross-encoder). Adds ~2GB of torch deps.
+# If not installed, /rerank automatically falls back to lexical BM25 scoring.
+# sentence-transformers>=3.0,<6
+paddleocr>=2.7.0
+paddlepaddle>=2.6.0
+PyMuPDF>=1.23.0

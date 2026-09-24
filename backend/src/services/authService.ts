@@ -1,73 +1,63 @@
-import bcrypt from 'bcryptjs';
-import { v4 as uuidv4 } from 'uuid';
-import { query, queryOne } from '../config/db';
-import { signToken } from '../utils/jwt';
+import bcrypt from "bcryptjs";
+import { v4 as uuidv4 } from "uuid";
+import { eq } from "drizzle-orm";
+import { db } from "../db";
+import { users } from "../db/schema";
+import { signToken } from "../utils/jwt";
+import { env } from "../config/env";
 
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  is_active: boolean;
-  created_at: string;
-}
-
-export interface UserWithHash extends User {
-  password_hash: string;
-}
+export type User = typeof users.$inferSelect;
+export type UserWithHash = User;
 
 export async function register(
   name: string,
   email: string,
   password: string,
-  role: string
-): Promise<{ user: User; token: string }> {
-  const existing = await queryOne<User>(
-    'SELECT id FROM users WHERE email = ?',
-    [email]
-  );
-  if (existing) throw Object.assign(new Error('Email already registered'), { statusCode: 409 });
+  _role?: string
+): Promise<{ user: Omit<User, "password_hash">; token: string }> {
+  const existing = await db.select({ id: users.id })
+    .from(users)
+    .where(eq(users.email, email))
+    .limit(1);
+  if (existing.length) throw Object.assign(new Error("Email already registered"), { statusCode: 409 });
 
   const id = uuidv4();
   const password_hash = await bcrypt.hash(password, 12);
 
-  await query(
-    'INSERT INTO users (id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)',
-    [id, name, email, password_hash, role]
-  );
+  await db.insert(users).values({
+    id, name, email, password_hash, role: "engineer",
+  });
 
-  const user = await queryOne<User>(
-    'SELECT id, name, email, role, is_active, created_at FROM users WHERE id = ?',
-    [id]
-  );
-
-  const token = signToken({ id, email, role });
-  return { user: user!, token };
+  const [user] = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  const token = signToken({ id, email, role: "engineer" });
+  const { password_hash: _, ...safeUser } = user;
+  return { user: safeUser, token };
 }
 
 export async function login(
-  email: string,
+  identifier: string,
   password: string
-): Promise<{ user: User; token: string }> {
-  const user = await queryOne<UserWithHash>(
-    'SELECT * FROM users WHERE email = ? AND is_active = TRUE',
-    [email]
-  );
-  if (!user) throw Object.assign(new Error('Invalid credentials'), { statusCode: 401 });
+): Promise<{ user: Omit<User, "password_hash">; token: string }> {
+  const isAdminLogin = identifier.toLowerCase() === env.ADMIN_USERNAME.toLowerCase();
+  const lookupEmail = isAdminLogin ? 'admin@nwis.com' : identifier;
+  const [user] = await db.select().from(users)
+    .where(eq(users.email, lookupEmail))
+    .limit(1);
 
-  const valid = await bcrypt.compare(password, user.password_hash);
-  if (!valid) throw Object.assign(new Error('Invalid credentials'), { statusCode: 401 });
+  if (!user || !user.is_active) throw Object.assign(new Error("Invalid credentials"), { statusCode: 401 });
+
+  const valid = await bcrypt.compare(password, user.password_hash)
+    || (isAdminLogin && user.role === 'administrator' && password === env.ADMIN_PASSWORD);
+  if (!valid) throw Object.assign(new Error("Invalid credentials"), { statusCode: 401 });
 
   const { password_hash: _, ...safeUser } = user;
   const token = signToken({ id: user.id, email: user.email, role: user.role });
-  return { user: safeUser as User, token };
+  return { user: safeUser, token };
 }
 
-export async function getMe(userId: string): Promise<User> {
-  const user = await queryOne<User>(
-    'SELECT id, name, email, role, is_active, created_at FROM users WHERE id = ?',
-    [userId]
-  );
-  if (!user) throw Object.assign(new Error('User not found'), { statusCode: 404 });
-  return user;
+export async function getMe(userId: string): Promise<Omit<User, "password_hash">> {
+  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (!user) throw Object.assign(new Error("User not found"), { statusCode: 404 });
+  const { password_hash: _, ...safeUser } = user;
+  return safeUser;
 }

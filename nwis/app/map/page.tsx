@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { motion } from 'framer-motion';
 import { useAppStore } from '@/store/appStore';
@@ -89,21 +89,108 @@ function WellListItem({ well, distance, onClick }: {
 // ─── Map View Page ────────────────────────────────────────────────────────────
 export default function MapPage() {
   const router = useRouter();
-  const { activeWell, mapRadius, setMapRadius, liveDepthFt } = useAppStore();
+  const { activeWell, mapCenter, setMapCenter, mapRadius, setMapRadius, liveDepthFt } = useAppStore();
 
   const [formationFilter, setFormationFilter] = useState<string>('all');
   const [incidentFilter, setIncidentFilter] = useState<string>('all');
   const [selectedWellId, setSelectedWellId] = useState<string | null>(null);
+  const [reportCounts, setReportCounts] = useState<Record<string, number>>({});
+  const [backendWells, setBackendWells] = useState<Well[]>([]);
+  const [locationQuery, setLocationQuery] = useState('');
+  const [locationResults, setLocationResults] = useState<Array<{ display_name: string; lat: string; lon: string }>>([]);
+  const [locationError, setLocationError] = useState('');
+
+  useEffect(() => {
+    const stored = localStorage.getItem('nwis_location');
+    if (!stored) return;
+    try {
+      const parsed = JSON.parse(stored);
+      if (Number.isFinite(Number(parsed.lat)) && Number.isFinite(Number(parsed.lng))) {
+        setMapCenter({ lat: Number(parsed.lat), lng: Number(parsed.lng) });
+      }
+    } catch {
+      localStorage.removeItem('nwis_location');
+    }
+  }, [setMapCenter]);
+
+  useEffect(() => {
+    fetch('/api/wells', { cache: 'no-store' })
+      .then((response) => response.json())
+      .then((payload) => {
+        const rows = payload.data?.wells ?? [];
+        setBackendWells(rows.map((well: Record<string, unknown>) => ({
+          ...well,
+          field: String(well.field_name ?? ''),
+          coordinates: { lat: Number(well.latitude), lng: Number(well.longitude) },
+          spudDate: String(well.spud_date ?? ''),
+          totalDepthFt: Number(well.total_depth_ft ?? 0),
+          measuredDepthFt: Number(well.total_depth_ft ?? 0),
+          trueVerticalDepthFt: Number(well.total_depth_ft ?? 0),
+          inclination: 0, azimuth: 0, casingProgram: [], formations: [], incidents: [],
+        })));
+      })
+      .catch(() => setBackendWells([]));
+  }, []);
+
+  async function searchLocation() {
+    if (!locationQuery.trim()) return;
+    const response = await fetch(`/api/geocode?q=${encodeURIComponent(locationQuery)}`);
+    if (response.ok) setLocationResults(await response.json());
+  }
+
+  function useCurrentLocation() {
+    setLocationError('');
+    if (!navigator.geolocation) {
+      setLocationError('Geolocation is not supported by this browser.');
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        const center = { lat: coords.latitude, lng: coords.longitude };
+        setMapCenter(center);
+        localStorage.setItem('nwis_location', JSON.stringify(center));
+      },
+      () => setLocationError('Unable to access your location. Check browser permissions.'),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+    );
+  }
+
+  const handleMapClick = useCallback((coordinates: { lat: number; lng: number }) => {
+    setMapCenter(coordinates);
+    localStorage.setItem('nwis_location', JSON.stringify(coordinates));
+  }, [setMapCenter]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/reports', { cache: 'no-store' })
+      .then(async response => {
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.message || payload.error || 'Unable to load reports');
+        return payload.data?.reports ?? [];
+      })
+      .then((reports: Array<{ well_id?: string }>) => {
+        if (cancelled) return;
+        const counts: Record<string, number> = {};
+        reports.forEach(report => {
+          if (report.well_id) counts[report.well_id] = (counts[report.well_id] ?? 0) + 1;
+        });
+        setReportCounts(counts);
+      })
+      .catch(error => console.error('Unable to load report map data:', error));
+    return () => { cancelled = true; };
+  }, []);
 
   // Nearby wells within radius
   const nearbyWells = useMemo(() => {
-    if (!activeWell) return [];
-    return MOCK_WELLS
+    if (!activeWell || !mapCenter) return [];
+    const sourceWells = backendWells.length ? backendWells : MOCK_WELLS;
+    return sourceWells
       .filter(w => w.id !== activeWell.id)
       .map(w => ({
         ...w,
+        reportCount: reportCounts[w.id] ?? 0,
         distance: getDistanceKm(
-          activeWell.coordinates.lat, activeWell.coordinates.lng,
+          mapCenter.lat, mapCenter.lng,
           w.coordinates.lat, w.coordinates.lng
         ),
         incidents: getIncidentsForWell(w.id),
@@ -118,7 +205,7 @@ export default function MapPage() {
         return w.incidents.some(i => i.type === incidentFilter);
       })
       .sort((a, b) => a.distance - b.distance);
-  }, [activeWell, mapRadius, formationFilter, incidentFilter]);
+  }, [activeWell, mapCenter, backendWells, mapRadius, formationFilter, incidentFilter, reportCounts]);
 
   const handleWellClick = useCallback((wellId: string) => {
     setSelectedWellId(wellId);
@@ -136,12 +223,15 @@ export default function MapPage() {
         {activeWell ? (
           <WellMap
             activeWell={activeWell}
+            mapCenter={mapCenter ?? activeWell.coordinates}
             nearbyWells={nearbyWells}
             radius={mapRadius}
             selectedWellId={selectedWellId}
             onWellClick={handleWellClick}
             onViewDetails={handleViewDetails}
             liveDepthFt={liveDepthFt}
+            activeReportCount={reportCounts[activeWell.id] ?? 0}
+            onMapClick={handleMapClick}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-muted/20">
@@ -187,7 +277,19 @@ export default function MapPage() {
               </Label>
               <span className="font-mono text-sm font-semibold text-foreground">{mapRadius} km</span>
             </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Map location</Label>
+              <div className="flex gap-2">
+                <input value={locationQuery} onChange={(e) => setLocationQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void searchLocation()} placeholder="Search location" className="min-w-0 flex-1 rounded-md border bg-background px-2 py-1.5 text-xs" />
+                <Button size="sm" variant="outline" onClick={() => void searchLocation()}>Search</Button>
+                <Button size="sm" variant="outline" onClick={useCurrentLocation} title="Use current location"><Navigation className="h-3.5 w-3.5" /></Button>
+              </div>
+              {locationError && <p className="text-xs text-destructive">{locationError}</p>}
+              {locationResults.length > 0 && <div className="space-y-1">{locationResults.map((result) => <button key={`${result.lat}-${result.lon}`} onClick={() => { const center = { lat: Number(result.lat), lng: Number(result.lon) }; setMapCenter(center); localStorage.setItem('nwis_location', JSON.stringify({ ...center, label: result.display_name })); setLocationResults([]); }} className="block w-full rounded p-1 text-left text-xs hover:bg-muted">{result.display_name}</button>)}</div>}
+            </div>
             <Slider
+              aria-label="Search radius in kilometers"
               min={2} max={50} step={1}
               value={[mapRadius]}
               onValueChange={(vals) => setMapRadius(Array.isArray(vals) ? (vals[0] as number) : (vals as unknown as number))}
@@ -283,14 +385,14 @@ export default function MapPage() {
           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Legend</p>
           <div className="grid grid-cols-2 gap-1.5">
             {[
-              { color: '#16A34A', label: 'No / low-risk incidents' },
-              { color: '#D97706', label: 'Medium-risk incidents' },
-              { color: '#DC2626', label: 'High-risk incidents' },
-              { color: '#0F4C81', label: 'Active well (drilling)' },
-            ].map(({ color, label }) => (
-              <div key={color} className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-full shrink-0 border-2 border-white/80 shadow-sm"
-                  style={{ backgroundColor: color }} />
+              { colorVar: 'var(--map-low)', label: 'No / low-risk incidents' },
+              { colorVar: 'var(--map-medium)', label: 'Medium-risk incidents' },
+              { colorVar: 'var(--map-high)', label: 'High-risk incidents' },
+              { colorVar: 'var(--map-active)', label: 'Active well (drilling)' },
+            ].map(({ colorVar, label }) => (
+              <div key={label} className="flex items-center gap-1.5">
+                <span aria-hidden="true" className="w-3 h-3 rounded-full shrink-0 border-2 border-white/20 shadow-sm"
+                  style={{ backgroundColor: colorVar }} />
                 <span className="text-[10px] text-muted-foreground leading-tight">{label}</span>
               </div>
             ))}

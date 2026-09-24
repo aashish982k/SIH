@@ -4,6 +4,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { useRTMACFeed } from '@/hooks/useRTMACFeed';
 import { useEffect } from 'react';
 import { useAppStore } from '@/store/appStore';
+import { AnimationProvider } from '@/lib/motion/AnimationContext';
 
 function RTMACProvider({ children }: { children: React.ReactNode }) {
   useRTMACFeed();
@@ -11,23 +12,23 @@ function RTMACProvider({ children }: { children: React.ReactNode }) {
 }
 
 function AuthHydrator({ children }: { children: React.ReactNode }) {
-  const setIsAdmin = useAppStore(s => s.setIsAdmin);
+  const hydrateAuth = useAppStore(s => s.hydrateAuth);
   useEffect(() => {
-    // Rehydrate admin state from localStorage on mount
-    const role = localStorage.getItem('nwis_role');
-    if (role === 'admin') setIsAdmin(true);
-  }, [setIsAdmin]);
+    hydrateAuth();
+  }, [hydrateAuth]);
   return <>{children}</>;
 }
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <TooltipProvider delay={300}>
-      <AuthHydrator>
-        <RTMACProvider>
-          {children}
-        </RTMACProvider>
-      </AuthHydrator>
-    </TooltipProvider>
+    <AnimationProvider>
+      <TooltipProvider delay={300}>
+        <AuthHydrator>
+          <RTMACProvider>
+            {children}
+          </RTMACProvider>
+        </AuthHydrator>
+      </TooltipProvider>
+    </AnimationProvider>
   );
 }

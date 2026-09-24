@@ -222,6 +222,8 @@ CREATE TABLE IF NOT EXISTS documents (
   document_date   DATE          NULL,
   description     TEXT          NULL,
   status          ENUM('uploaded','processing','processed','failed') NOT NULL DEFAULT 'uploaded',
+  processing_checkpoint VARCHAR(80) NULL,
+  processing_error TEXT NULL,
   created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (well_id)     REFERENCES wells(id) ON DELETE SET NULL,
@@ -276,7 +278,10 @@ CREATE TABLE IF NOT EXISTS risks (
   confidence        DECIMAL(5,4)  NULL COMMENT '0.0 to 1.0',
   message           TEXT          NOT NULL,
   description       TEXT          NULL,
-  source            ENUM('rule_engine','ml_model','manual') NOT NULL DEFAULT 'rule_engine',
+  source ENUM('rule_engine','ml_model','rag_llm','manual') NOT NULL DEFAULT 'rule_engine',
+  reasoning TEXT NULL,
+  evidence JSON NULL,
+  recommendation TEXT NULL,
   related_well_ids  JSON          NULL COMMENT 'Array of nearby well IDs that contributed',
   status            ENUM('active','resolved','dismissed') NOT NULL DEFAULT 'active',
   resolved_at       DATETIME      NULL,
@@ -309,6 +314,26 @@ CREATE TABLE IF NOT EXISTS recommendations (
   INDEX idx_rec_well   (well_id),
   INDEX idx_rec_risk   (risk_id),
   INDEX idx_rec_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ────────────────────────────────────────────────────────────
+-- 14. ALERTS (persisted alert:new WebSocket events)
+-- ────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS alerts (
+  id          CHAR(36)    NOT NULL PRIMARY KEY DEFAULT (UUID()),
+  well_id     CHAR(36)    NOT NULL,
+  risk_id     CHAR(36)    NULL  COMMENT 'FK to risks — NULL when alert is not linked to a risk record',
+  alert_type  VARCHAR(60) NOT NULL  COMMENT 'e.g. STUCK_PIPE, KICK, MUD_LOSS',
+  severity    ENUM('low','medium','high','critical') NOT NULL DEFAULT 'medium',
+  payload     JSON        NOT NULL  COMMENT 'Full alert:new WS payload for replay / audit',
+  seen_at     DATETIME    NULL      COMMENT 'NULL = unread; set when engineer acknowledges',
+  created_at  DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (well_id) REFERENCES wells(id) ON DELETE CASCADE,
+  FOREIGN KEY (risk_id) REFERENCES risks(id) ON DELETE SET NULL,
+  INDEX idx_alert_well    (well_id),
+  INDEX idx_alert_type    (alert_type),
+  INDEX idx_alert_seen    (seen_at),
+  INDEX idx_alert_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 SET FOREIGN_KEY_CHECKS = 1;

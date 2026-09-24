@@ -1,58 +1,70 @@
 import fs from 'fs';
 import path from 'path';
-const pdfParse = require('pdf-parse');
-import Tesseract from 'tesseract.js';
 import { env } from '../config/env';
 
 export class OCRService {
-  /**
-   * Extracts text from a document.
-   * Uses pdf-parse for PDFs. Images/scanned PDFs fallback to tesseract if configured.
-   */
-  public async extractText(filePath: string): Promise<string> {
+  public async extractTextWithMethod(filePath: string): Promise<{ text: string; method: 'native-pdf' | 'ocr' | 'text' }> {
     const ext = path.extname(filePath).toLowerCase();
-
-    if (!fs.existsSync(filePath)) {
-      throw new Error(`File not found: ${filePath}`);
-    }
-
+    if (ext === '.txt') return { text: await fs.promises.readFile(filePath, 'utf-8'), method: 'text' };
     if (ext === '.pdf') {
-      return this.extractFromPDF(filePath);
-    } else if (['.png', '.jpg', '.jpeg'].includes(ext)) {
-      return this.extractFromImage(filePath);
-    } else if (ext === '.txt') {
-      return fs.promises.readFile(filePath, 'utf-8');
+      try {
+        const nativeText = await this.extractNativePdf(filePath);
+        if (nativeText.trim().length >= 50) return { text: nativeText, method: 'native-pdf' };
+        console.log(`Native PDF extraction returned insufficient text for ${path.basename(filePath)}; falling back to OCR.`);
+      } catch (error) {
+        console.warn(`Native PDF extraction failed for ${path.basename(filePath)}; falling back to OCR:`, error);
+      }
+      return { text: await this.extractViaML(filePath, 'pdf'), method: 'ocr' };
     }
-
+    if (['.png', '.jpg', '.jpeg'].includes(ext)) {
+      return { text: await this.extractViaML(filePath, 'image'), method: 'ocr' };
+    }
     throw new Error(`Unsupported file type for OCR: ${ext}`);
   }
 
-  private async extractFromPDF(filePath: string): Promise<string> {
-    try {
-      const dataBuffer = await fs.promises.readFile(filePath);
-      const data = await pdfParse(dataBuffer);
-      
-      // If pdf-parse didn't find much text, it might be a scanned PDF.
-      // In a full production scenario, we would use an OCR pipeline like Ghostscript + Tesseract here.
-      // For now, we return what pdfParse got.
-      if (data.text.trim().length < 50 && env.OCR_PROVIDER === 'tesseract') {
-         console.warn('PDF appears to be scanned. OCR for scanned PDFs is currently limited.');
-      }
-      
-      return data.text;
-    } catch (error) {
-      console.error('Error extracting text from PDF:', error);
-      throw new Error('Failed to parse PDF document.');
+  /**
+   * Extracts text from a document.
+   * Defers to the ML service /ocr endpoint for PaddleOCR processing.
+   */
+  public async extractText(filePath: string): Promise<string> {
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`File not found: ${filePath}`);
     }
+    return (await this.extractTextWithMethod(filePath)).text;
   }
 
-  private async extractFromImage(filePath: string): Promise<string> {
+  private async extractNativePdf(filePath: string): Promise<string> {
+    const { PDFParse } = await import('pdf-parse');
+    const parser = new PDFParse({ data: await fs.promises.readFile(filePath) });
+    const result = await parser.getText();
+    await parser.destroy();
+    return result.text;
+  }
+
+  private async extractViaML(filePath: string, fileType: string): Promise<string> {
     try {
-      const { data: { text } } = await Tesseract.recognize(filePath, 'eng');
-      return text;
+      const dataBuffer = await fs.promises.readFile(filePath);
+      const base64Data = dataBuffer.toString('base64');
+      
+      const response = await fetch(`${env.ML_SERVICE_URL}/ocr`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          file_base64: base64Data,
+          file_type: fileType,
+          max_pages: 20
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`ML service returned ${response.status} ${response.statusText}`);
+      }
+
+      const result = (await response.json()) as { text: string };
+      return result.text;
     } catch (error) {
-      console.error('Error extracting text from image:', error);
-      throw new Error('Failed to run OCR on image.');
+      console.error(`Error extracting text from ${fileType} via ML service:`, error);
+      throw new Error(`Failed to parse ${fileType} document.`);
     }
   }
 }

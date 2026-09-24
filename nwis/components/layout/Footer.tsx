@@ -9,7 +9,7 @@ export default function Footer() {
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded-md bg-primary/10 flex items-center justify-center">
-              <Droplets className="w-3 h-3 text-primary" />
+              <Droplets aria-hidden="true" className="w-3 h-3 text-primary" />
             </div>
             <span className="text-sm font-semibold text-foreground">NWIS</span>
             <span className="text-muted-foreground text-sm">·</span>
@@ -20,8 +20,8 @@ export default function Footer() {
             <span>·</span>
             <span>v1.0.0-demo</span>
             <span>·</span>
-            <Link href="/admin" className="hover:text-primary transition-colors flex items-center gap-1">
-              Admin <ExternalLink className="w-3 h-3" />
+            <Link href="/admin" className="hover:text-primary transition-colors flex items-center gap-1 focus-visible:ring-2 focus-visible:ring-ring rounded outline-none">
+              Admin <ExternalLink aria-hidden="true" className="w-3 h-3" />
             </Link>
           </div>
         </div>

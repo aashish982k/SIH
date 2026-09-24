@@ -1,5 +1,5 @@
 export interface ExtractedEntity {
-  type: 'depth' | 'formation' | 'event_type' | 'severity' | 'mitigation' | 'outcome';
+  type: 'depth' | 'formation' | 'event_type' | 'severity' | 'mitigation' | 'outcome' | 'cause' | 'impact' | 'lessons_learned';
   value: string;
   context?: string;
 }
@@ -60,15 +60,34 @@ export class NLPService {
 
     // 5. Extract Mitigation (basic keyword search)
     if (lowerText.includes('mitigated by') || lowerText.includes('controlled using') || lowerText.includes('pumped')) {
-      // Very naive extraction, just grabs the sentence containing the keyword
       const sentences = text.split(/[.!?]+/);
       const mitigationSentence = sentences.find(s => s.toLowerCase().includes('mitigated by') || s.toLowerCase().includes('controlled using') || s.toLowerCase().includes('pumped'));
       if (mitigationSentence) {
-         entities.push({
-            type: 'mitigation',
-            value: mitigationSentence.trim()
-         });
+         entities.push({ type: 'mitigation', value: mitigationSentence.trim() });
       }
+    }
+
+    // 6. Extract Cause, Impact, Outcome, Lessons Learned (basic keyword sentences)
+    const sentences = text.split(/[.!?]+/);
+    
+    const causeSentences = sentences.filter(s => s.toLowerCase().includes('caused by') || s.toLowerCase().includes('due to'));
+    if (causeSentences.length) {
+       entities.push({ type: 'cause', value: causeSentences.join('. ').trim() });
+    }
+
+    const impactSentences = sentences.filter(s => s.toLowerCase().includes('resulted in') || s.toLowerCase().includes('led to'));
+    if (impactSentences.length) {
+       entities.push({ type: 'impact', value: impactSentences.join('. ').trim() });
+    }
+
+    const outcomeSentences = sentences.filter(s => s.toLowerCase().includes('outcome was') || s.toLowerCase().includes('finally'));
+    if (outcomeSentences.length) {
+       entities.push({ type: 'outcome', value: outcomeSentences.join('. ').trim() });
+    }
+
+    const lessonSentences = sentences.filter(s => s.toLowerCase().includes('lesson') || s.toLowerCase().includes('recommend'));
+    if (lessonSentences.length) {
+       entities.push({ type: 'lessons_learned', value: lessonSentences.join('. ').trim() });
     }
 
     return entities;

@@ -13,8 +13,8 @@ export async function register(req: AuthRequest, res: Response, next: NextFuncti
 
 export async function login(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { email, password } = req.body;
-    const result = await authService.login(email, password);
+    const { email, username, password } = req.body;
+    const result = await authService.login(email ?? username, password);
     sendSuccess(res, result, 'Login successful');
   } catch (err) { next(err); }
 }

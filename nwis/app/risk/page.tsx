@@ -2,15 +2,18 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useAppStore } from '@/store/appStore';
 import { MOCK_THREAT_MATRIX, HISTORICAL_ALERTS } from '@/lib/mock/alerts';
-import { cn, getRiskBgClass, getRiskBorderClass, getRiskLabel, getIncidentLabel, formatDepth, timeAgo } from '@/lib/utils';
+import { cn, getRiskBgClass, getRiskBorderClass, getRiskLabel, getRiskColor, getIncidentLabel, formatDepth, timeAgo } from '@/lib/utils';
+import { DrillingParamsGrid } from '@/components/wells/DrillingParamsGrid';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Separator } from '@/components/ui/separator';
+import { HeadlineReveal } from '@/components/motion/HeadlineReveal';
+import { AnimatedStat } from '@/components/motion/AnimatedStat';
 import {
   AlertTriangle, Activity, Map, ChevronDown, ChevronRight,
   Clock, Zap, CheckCircle, Eye
@@ -30,21 +33,19 @@ function RiskGauge({ score, level }: { score: number; level: RiskLevel }) {
   const dashArray = `${circumference}`;
   const [animatedFill, setAnimatedFill] = useState(0);
 
-  const color =
-    level === 'low' ? 'var(--risk-low)' :
-    level === 'medium' ? 'var(--risk-medium)' :
-    level === 'critical' ? 'var(--risk-critical)' :
-    'var(--risk-high)';
+  const color = getRiskColor(level);
 
   useEffect(() => {
     const timer = setTimeout(() => setAnimatedFill(filled), 200);
     return () => clearTimeout(timer);
   }, [filled]);
 
-  // Convert polar to cartesian
   function polarToXY(angleDeg: number) {
     const rad = ((angleDeg - 90) * Math.PI) / 180;
-    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+    return { 
+      x: Number((cx + r * Math.cos(rad)).toFixed(2)), 
+      y: Number((cy + r * Math.sin(rad)).toFixed(2)) 
+    };
   }
 
   // Arc path (start → end)
@@ -124,7 +125,7 @@ function DepthTape({ depth }: { depth: number }) {
         <div className="absolute left-0 right-0 top-1/2 h-px bg-primary" />
         <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 bg-primary rounded-full" />
       </div>
-      <p className="font-mono text-base font-bold text-foreground mt-2">{formatDepth(depth)}<span className="text-xs text-muted-foreground font-normal ml-1">ft</span></p>
+      <p className="font-mono text-base font-bold text-foreground mt-2"><AnimatedStat value={depth} format={formatDepth} /><span className="text-xs text-muted-foreground font-normal ml-1">ft</span></p>
       <p className="text-[10px] text-muted-foreground uppercase tracking-wider">MD</p>
     </div>
   );
@@ -132,7 +133,6 @@ function DepthTape({ depth }: { depth: number }) {
 
 // ─── Alert Card ───────────────────────────────────────────────────────────────
 function AlertCard({ alert, isNew }: { alert: Alert; isNew: boolean }) {
-  const router = useRouter();
   const { acknowledgeAlert } = useAppStore();
 
   return (
@@ -163,7 +163,7 @@ function AlertCard({ alert, isNew }: { alert: Alert; isNew: boolean }) {
           <p className="text-sm font-medium text-foreground leading-snug">{alert.message}</p>
           <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
             <Clock className="w-3 h-3" />
-            {timeAgo(alert.timestamp)}
+            <span suppressHydrationWarning>{timeAgo(alert.timestamp)}</span>
           </p>
         </div>
         {alert.status === 'new' && (
@@ -178,39 +178,60 @@ function AlertCard({ alert, isNew }: { alert: Alert; isNew: boolean }) {
         )}
       </div>
 
-      {/* Recommended Action */}
+      {/* AI Insight Block */}
       <Accordion className="mt-2">
-        <AccordionItem value="action" className="border-none">
+        <AccordionItem value="insight" className="border-none">
           <AccordionTrigger className="py-1 text-xs text-primary hover:no-underline font-medium">
-            <Zap className="w-3 h-3 mr-1" />Recommended Action
+            <Zap className="w-3 h-3 mr-1" />AI Insight & Recommendation
           </AccordionTrigger>
-          <AccordionContent className="pt-1 pb-0">
-            <p className="text-xs text-muted-foreground leading-relaxed">{alert.recommendedAction}</p>
+          <AccordionContent className="pt-2 pb-0">
+            <motion.div 
+              initial="hidden" 
+              animate="visible" 
+              variants={{ visible: { transition: { staggerChildren: 0.1 } } }}
+              className="bg-muted/20 border border-primary/20 rounded-lg p-3 space-y-2.5"
+            >
+              <motion.div variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}>
+                <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Evidence</p>
+                <p className="text-xs text-foreground mt-0.5">Historical patterns matched in {alert.relatedWellIds.length} offset wells near <AnimatedStat value={alert.depthFt} format={formatDepth} /> ft.</p>
+              </motion.div>
+              <Separator className="bg-primary/10" />
+              <motion.div variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}>
+                <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Insight</p>
+                <p className="text-xs text-foreground mt-0.5">Elevated risk of {getIncidentLabel(alert.incidentType)} under current drilling parameters.</p>
+              </motion.div>
+              <motion.div variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }} className="bg-primary/15 rounded border border-primary/30 p-2.5 mt-1">
+                <p className="text-[10px] text-primary font-semibold uppercase tracking-wider">Recommendation</p>
+                <p className="text-xs text-primary-foreground font-medium mt-0.5" style={{ color: 'var(--foreground)' }}>{alert.recommendedAction}</p>
+              </motion.div>
+            </motion.div>
           </AccordionContent>
         </AccordionItem>
       </Accordion>
 
       <div className="flex gap-2 mt-2">
         {alert.relatedWellIds.length > 0 && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 text-xs gap-1"
-            onClick={() => router.push('/map')}
+          <Link
+            href="/map"
+            className={cn(
+              'inline-flex items-center gap-1 h-7 px-2.5 text-xs rounded-md border border-border',
+              'hover:bg-muted transition-colors focus-visible:ring-2 focus-visible:ring-ring outline-none'
+            )}
           >
-            <Map className="w-3 h-3" />View on Map
-          </Button>
+            <Map aria-hidden="true" className="w-3 h-3" />View on Map
+          </Link>
         )}
         {alert.relatedWellIds.slice(0, 2).map(wid => (
-          <Button
+          <Link
             key={wid}
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs gap-1"
-            onClick={() => router.push(`/wells/${wid}`)}
+            href={`/wells/${wid}`}
+            className={cn(
+              'inline-flex items-center gap-1 h-7 px-2.5 text-xs rounded-md',
+              'hover:bg-muted transition-colors focus-visible:ring-2 focus-visible:ring-ring outline-none'
+            )}
           >
-            <Eye className="w-3 h-3" />{wid.replace('well-', 'W-')}
-          </Button>
+            <Eye aria-hidden="true" className="w-3 h-3" />{wid.replace('well-', 'W-')}
+          </Link>
         ))}
       </div>
     </motion.div>
@@ -219,9 +240,38 @@ function AlertCard({ alert, isNew }: { alert: Alert; isNew: boolean }) {
 
 // ─── Risk & Alerts Page ───────────────────────────────────────────────────────
 export default function RiskPage() {
-  const { liveDepthFt, liveRiskScore, liveRiskLevel, alerts, liveRtmacData, acknowledgeAlert } = useAppStore();
+  const { liveDepthFt, liveRiskScore, liveRiskLevel, alerts, liveRtmacData, acknowledgeAlert, activeWellId } = useAppStore();
   const newAlerts = alerts.filter(a => a.status === 'new');
   const acknowledgedAlerts = alerts.filter(a => a.status === 'acknowledged');
+
+  const [threatMatrix, setThreatMatrix] = useState<any[]>(MOCK_THREAT_MATRIX);
+
+  useEffect(() => {
+    if (!activeWellId) return;
+    fetch(`/api/wells/${activeWellId}/risks`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.data?.risks) {
+          const mapped = data.data.risks.map((r: any) => {
+            const probFloat = parseFloat(r.probability);
+            const probLevel = probFloat >= 0.8 ? 'critical' : probFloat >= 0.6 ? 'high' : probFloat >= 0.3 ? 'medium' : 'low';
+            return {
+              riskFactor: r.risk_type.replace('_', ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),
+              probability: probLevel,
+              severity: r.severity || 'medium',
+              confidence: r.confidence ? parseInt(r.confidence, 10) : Math.round(probFloat * 100),
+              relatedWellCount: r.related_well_ids ? r.related_well_ids.length : 0,
+              description: r.description || r.message,
+              reasoning: r.reasoning || r.description,
+              recommendation: r.recommendation,
+              evidence: Array.isArray(r.evidence) ? r.evidence : [],
+            };
+          });
+          if (mapped.length > 0) setThreatMatrix(mapped);
+        }
+      })
+      .catch(console.error);
+  }, [activeWellId, alerts.length]); // Refresh if alerts change (new risk)
 
   return (
     <div className="mx-auto max-w-[1400px] px-4 md:px-6 py-8">
@@ -232,8 +282,8 @@ export default function RiskPage() {
         className="mb-6"
       >
         <div className="flex items-center gap-2">
-          <AlertTriangle className="w-5 h-5 text-destructive" />
-          <h1 className="text-2xl font-bold text-foreground">Risk & Alerts</h1>
+          <AlertTriangle aria-hidden="true" className="w-5 h-5 text-destructive" />
+          <HeadlineReveal className="text-2xl font-bold text-foreground">Risk & Alerts</HeadlineReveal>
         </div>
         <p className="text-sm text-muted-foreground mt-0.5">
           Live risk assessment and alert monitoring for the active well
@@ -247,7 +297,6 @@ export default function RiskPage() {
         transition={{ delay: 0.1 }}
         className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6"
       >
-        {/* Depth Tape */}
         <Card className="border-border/60">
           <CardContent className="p-5 flex flex-col items-center">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-3 self-start">
@@ -281,23 +330,7 @@ export default function RiskPage() {
               Drilling Parameters
             </p>
             {liveRtmacData ? (
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { label: 'ROP', value: `${liveRtmacData.rateOfPenetrationFtHr.toFixed(1)}`, unit: 'ft/hr' },
-                  { label: 'WOB', value: `${liveRtmacData.weightOnBitKlbs.toFixed(1)}`, unit: 'klbs' },
-                  { label: 'RPM', value: `${liveRtmacData.rotarySpeedRpm}`, unit: '' },
-                  { label: 'Mud Wt', value: `${liveRtmacData.mudWeightPpg.toFixed(2)}`, unit: 'ppg' },
-                  { label: 'SPP', value: `${liveRtmacData.standpipePressurePsi}`, unit: 'psi' },
-                  { label: 'Updated', value: timeAgo(liveRtmacData.timestamp), unit: '' },
-                ].map(({ label, value, unit }) => (
-                  <div key={label}>
-                    <p className="text-[10px] text-muted-foreground uppercase">{label}</p>
-                    <p className="font-mono text-sm font-bold text-foreground">
-                      {value}<span className="text-xs font-normal text-muted-foreground ml-1">{unit}</span>
-                    </p>
-                  </div>
-                ))}
-              </div>
+              <DrillingParamsGrid data={liveRtmacData} className="gap-3" />
             ) : (
               <p className="text-sm text-muted-foreground">Connecting to eRTMAC…</p>
             )}
@@ -314,7 +347,7 @@ export default function RiskPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
         >
-          <Card className="border-border/60">
+          <Card className="border-border/60 h-full">
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <Activity className="w-4 h-4 text-primary" />
@@ -322,7 +355,7 @@ export default function RiskPage() {
               </CardTitle>
             </CardHeader>
             <div className="overflow-x-auto">
-              <table className="w-full text-xs">
+              <table className="w-full text-xs tabular-nums">
                 <thead>
                   <tr className="border-b border-border bg-muted/30">
                     {['Risk Factor', 'Prob.', 'Severity', 'Confidence', 'Wells'].map(h => (
@@ -333,7 +366,7 @@ export default function RiskPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/40">
-                  {MOCK_THREAT_MATRIX.map((row, i) => (
+                  {threatMatrix.map((row, i) => (
                     <motion.tr
                       key={row.riskFactor}
                       initial={{ opacity: 0, x: -8 }}
@@ -344,6 +377,25 @@ export default function RiskPage() {
                       <td className="py-3 pl-5 pr-3">
                         <p className="font-medium text-foreground text-[11px]">{row.riskFactor}</p>
                         <p className="text-muted-foreground text-[10px] line-clamp-1 mt-0.5">{row.description}</p>
+                        {(row.reasoning || row.recommendation || row.evidence?.length > 0) && (
+                          <Accordion className="mt-1">
+                            <AccordionItem value={`risk-${i}`} className="border-none">
+                              <AccordionTrigger className="py-0 text-[10px] text-primary hover:no-underline">
+                                View AI reasoning & evidence
+                              </AccordionTrigger>
+                              <AccordionContent className="pt-1 text-[10px] text-muted-foreground space-y-1">
+                                {row.reasoning && <p><span className="font-semibold text-foreground">Reasoning:</span> {row.reasoning}</p>}
+                                {row.recommendation && <p><span className="font-semibold text-foreground">Recommendation:</span> {row.recommendation}</p>}
+                                {row.evidence?.slice(0, 3).map((item: any, evidenceIndex: number) => (
+                                  <p key={evidenceIndex} className="border-l-2 border-primary/30 pl-2">
+                                    “{item.text || item.chunk_text}”
+                                    {item.well ? ` — ${item.well}` : ''}
+                                  </p>
+                                ))}
+                              </AccordionContent>
+                            </AccordionItem>
+                          </Accordion>
+                        )}
                       </td>
                       <td className="py-3 px-3">
                         <span className={cn('text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded', getRiskBgClass(row.probability))}>
@@ -391,7 +443,7 @@ export default function RiskPage() {
                 )}
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3 overflow-y-auto max-h-[460px] pr-1">
+            <CardContent className="space-y-3 overflow-y-auto max-h-[460px] pr-1" aria-live="polite" aria-label="Active alerts feed">
               <AnimatePresence>
                 {[...newAlerts, ...acknowledgedAlerts].map(alert => (
                   <AlertCard key={alert.id} alert={alert} isNew={alert.status === 'new'} />

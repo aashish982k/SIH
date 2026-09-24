@@ -9,8 +9,8 @@ const eventTypeEnum = z.enum([
 const severityEnum = z.enum(['low','medium','high','critical']);
 
 export const createEventSchema = z.object({
-  well_id: z.string().uuid(),
-  formation_id: z.string().uuid().optional(),
+  well_id: z.string().min(1),
+  formation_id: z.string().min(1).optional(),
   event_type: eventTypeEnum,
   severity: severityEnum.default('medium'),
   start_depth_ft: z.number().nonnegative(),
@@ -27,9 +27,9 @@ export const createEventSchema = z.object({
 });
 
 export const listEventsQuerySchema = z.object({
-  well_id: z.string().uuid().optional(),
+  well_id: z.string().min(1).optional(),
   event_type: eventTypeEnum.optional(),
-  formation_id: z.string().uuid().optional(),
+  formation_id: z.string().min(1).optional(),
   severity: severityEnum.optional(),
   depth_min: z.coerce.number().nonnegative().optional(),
   depth_max: z.coerce.number().nonnegative().optional(),

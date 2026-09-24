@@ -1,6 +1,11 @@
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
-import { query, queryOne } from '../config/db';
+import fs from 'fs/promises';
+import { eq, desc, getTableColumns, sql } from 'drizzle-orm';
+import { db } from '../db';
+import { documents, wells, users } from '../db/schema';
+
+export type Document = typeof documents.$inferSelect;
 
 export async function uploadReport(
   file: Express.Multer.File,
@@ -13,39 +18,72 @@ export async function uploadReport(
   const id = uuidv4();
   const filePath = path.relative(process.cwd(), file.path);
 
-  await query(
-    `INSERT INTO documents (id, well_id, uploaded_by, document_type, file_name, file_path, file_size_bytes, document_date, description, status)
-     VALUES (?,?,?,?,?,?,?,?,?,?)`,
-    [
-      id, wellId ?? null, userId,
-      documentType ?? 'other', file.originalname, filePath,
-      file.size, documentDate ?? null, description ?? null, 'uploaded',
-    ]
-  );
+  try {
+    await db.insert(documents).values({
+      id,
+      well_id:         wellId || null,
+      uploaded_by:     userId,
+      document_type:   (documentType ?? 'other') as Document['document_type'],
+      file_name:       file.originalname,
+      file_path:       filePath,
+      file_size_bytes: file.size,
+      document_date:   documentDate ? new Date(documentDate) : null,
+      description:     description ?? null,
+      status:          'uploaded',
+    });
+  } catch (error) {
+    await fs.unlink(file.path).catch(() => undefined);
+    throw error;
+  }
 
-  return queryOne('SELECT * FROM documents WHERE id = ?', [id]);
+  const [doc] = await db.select().from(documents).where(eq(documents.id, id)).limit(1);
+  return doc;
 }
 
-export async function listReports(userId: string): Promise<any[]> {
-  return query(
-    `SELECT d.*, w.name AS well_name, u.name AS uploaded_by_name
-     FROM documents d
-     LEFT JOIN wells w ON d.well_id = w.id
-     LEFT JOIN users u ON d.uploaded_by = u.id
-     WHERE d.uploaded_by = ?
-     ORDER BY d.created_at DESC`,
-    [userId]
-  );
+export async function listReports(_userId: string): Promise<any[]> {
+  const rows = await db.select({
+    ...getTableColumns(documents),
+    well_name: wells.name,
+    uploaded_by_name: users.name,
+  })
+    .from(documents)
+    .leftJoin(wells, eq(documents.well_id, wells.id))
+    .leftJoin(users, eq(documents.uploaded_by, users.id))
+    .orderBy(desc(documents.created_at));
+    
+  return rows;
 }
 
-export async function getReportById(id: string, userId: string): Promise<any | null> {
-  const doc = await queryOne(
-    `SELECT d.*, w.name AS well_name, u.name AS uploaded_by_name
-     FROM documents d
-     LEFT JOIN wells w ON d.well_id = w.id
-     LEFT JOIN users u ON d.uploaded_by = u.id
-     WHERE d.id = ? AND d.uploaded_by = ?`,
-    [id, userId]
-  );
+export async function getGlobalReportStats(): Promise<{
+  total: number; processed: number; processing: number; failed: number; uploaded: number;
+}> {
+  const [row] = await db.select({
+    total: sql<number>`COUNT(*)`,
+    processed: sql<number>`SUM(${documents.status} = 'processed')`,
+    processing: sql<number>`SUM(${documents.status} = 'processing')`,
+    failed: sql<number>`SUM(${documents.status} = 'failed')`,
+    uploaded: sql<number>`SUM(${documents.status} = 'uploaded')`,
+  }).from(documents);
+  return {
+    total: Number(row?.total ?? 0),
+    processed: Number(row?.processed ?? 0),
+    processing: Number(row?.processing ?? 0),
+    failed: Number(row?.failed ?? 0),
+    uploaded: Number(row?.uploaded ?? 0),
+  };
+}
+
+export async function getReportById(id: string, _userId: string): Promise<any | null> {
+  const [doc] = await db.select({
+    ...getTableColumns(documents),
+    well_name: wells.name,
+    uploaded_by_name: users.name,
+  })
+    .from(documents)
+    .leftJoin(wells, eq(documents.well_id, wells.id))
+    .leftJoin(users, eq(documents.uploaded_by, users.id))
+    .where(eq(documents.id, id))
+    .limit(1);
+
   return doc ?? null;
 }

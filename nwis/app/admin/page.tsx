@@ -5,26 +5,34 @@ import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { useAppStore } from '@/store/appStore';
 import { MOCK_WELLS } from '@/lib/mock/wells';
-import { cn, formatDate } from '@/lib/utils';
+import { getIncidentsForWell } from '@/lib/mock/incidents';
+import { cn, formatDate, getIncidentLabel, getRiskBgClass } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
 import {
   FileText, AlertTriangle,
   Plus, Pencil, Trash2, Download, Shield, LogOut
 } from 'lucide-react';
+import type { Incident } from '@/lib/types';
 
 
 // ─── Admin Page ───────────────────────────────────────────────────────────────
 export default function AdminPage() {
   const router = useRouter();
   const { isAdmin, logout } = useAppStore();
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  // Flatten all incidents with their well name once, instead of per-row require() calls
+  const allIncidents: (Incident & { wellName: string })[] = MOCK_WELLS.flatMap(w =>
+    getIncidentsForWell(w.id).map(inc => ({ ...inc, wellName: w.name }))
+  );
+
+  const handleLogout = () => {
+    logout();
+    router.push('/login');
+  };
 
   if (!isAdmin) {
     return (
@@ -109,12 +117,31 @@ export default function AdminPage() {
                       <td className="py-3 px-4 text-muted-foreground">{formatDate(well.spudDate)}</td>
                       <td className="py-3 px-4 pr-5">
                         <div className="flex items-center gap-1.5">
-                          <Button variant="ghost" size="icon" className="h-7 w-7">
-                            <Pencil className="w-3.5 h-3.5" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
+                          {confirmDeleteId === well.id ? (
+                            <>
+                              <Button variant="destructive" size="sm" className="h-7 text-xs" onClick={() => setConfirmDeleteId(null)}>
+                                Confirm Delete
+                              </Button>
+                              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setConfirmDeleteId(null)}>
+                                Cancel
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button variant="ghost" size="icon" aria-label={`Edit well ${well.name}`} className="h-7 w-7">
+                                <Pencil aria-hidden="true" className="w-3.5 h-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                aria-label={`Delete well ${well.name}`}
+                                className="h-7 w-7 text-destructive hover:text-destructive"
+                                onClick={() => setConfirmDeleteId(well.id)}
+                              >
+                                <Trash2 aria-hidden="true" className="w-3.5 h-3.5" />
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -146,13 +173,12 @@ export default function AdminPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/40">
-                  {MOCK_WELLS.flatMap(w =>
-                    require('@/lib/mock/incidents').getIncidentsForWell(w.id).map((inc: any) => (
+                  {allIncidents.map(inc => (
                       <tr key={inc.id} className="hover:bg-muted/20 transition-colors">
-                        <td className="py-2.5 pl-5 pr-4 font-medium text-foreground">{w.name}</td>
-                        <td className="py-2.5 px-4 text-muted-foreground">{require('@/lib/utils').getIncidentLabel(inc.type)}</td>
+                        <td className="py-2.5 pl-5 pr-4 font-medium text-foreground">{inc.wellName}</td>
+                        <td className="py-2.5 px-4 text-muted-foreground">{getIncidentLabel(inc.type)}</td>
                         <td className="py-2.5 px-4">
-                          <span className={cn('text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded', require('@/lib/utils').getRiskBgClass(inc.severity))}>
+                          <span className={cn('text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded', getRiskBgClass(inc.severity))}>
                             {inc.severity}
                           </span>
                         </td>
@@ -160,8 +186,7 @@ export default function AdminPage() {
                         <td className="py-2.5 px-4 text-muted-foreground">{formatDate(inc.date)}</td>
                         <td className="py-2.5 px-4 text-muted-foreground">{inc.durationHours}h</td>
                       </tr>
-                    ))
-                  )}
+                  ))}
                 </tbody>
               </table>
             </div>

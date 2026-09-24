@@ -1,38 +1,52 @@
-import { query } from '../config/db';
+import { v4 as uuidv4 } from 'uuid';
+import { eq, desc, and, isNull } from 'drizzle-orm';
+import { db } from '../db';
+import { alerts } from '../db/schema';
+
+export interface CreateAlertData {
+  wellId: string;
+  riskId?: string | null;
+  alertType: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  payload: object;
+}
 
 export class AlertService {
-  /**
-   * Saves an alert to the database
-   */
-  public async createAlert(
-    wellId: string,
-    alertType: string,
-    message: string,
-    severity: string
-  ): Promise<any> {
-    const sql = `
-      INSERT INTO alerts (well_id, alert_type, message, severity, status)
-      VALUES (?, ?, ?, ?, 'active')
-    `;
-    const result: any = await query(sql, [wellId, alertType, message, severity]);
-    
-    return {
-      id: result.insertId,
-      well_id: wellId,
-      alert_type: alertType,
-      message,
-      severity,
-      status: 'active',
-      created_at: new Date()
-    };
+  public async createAlert(data: CreateAlertData): Promise<string> {
+    const id = uuidv4();
+    await db.insert(alerts).values({
+      id,
+      well_id: data.wellId,
+      risk_id: data.riskId || null,
+      alert_type: data.alertType,
+      severity: data.severity,
+      payload: data.payload,
+    });
+    return id;
   }
 
-  /**
-   * Retrieves active alerts for a well
-   */
-  public async getActiveAlerts(wellId: string): Promise<any[]> {
-    const sql = `SELECT * FROM alerts WHERE well_id = ? AND status = 'active' ORDER BY created_at DESC`;
-    return (await query(sql, [wellId])) as any[];
+  public async listAlerts(wellId: string, unreadOnly: boolean = false): Promise<any[]> {
+    const conditions = [eq(alerts.well_id, wellId)];
+    if (unreadOnly) {
+      conditions.push(isNull(alerts.seen_at));
+    }
+
+    return await db.select()
+      .from(alerts)
+      .where(and(...conditions))
+      .orderBy(desc(alerts.created_at));
+  }
+
+  public async markAlertSeen(alertId: string): Promise<void> {
+    await db.update(alerts)
+      .set({ seen_at: new Date() })
+      .where(eq(alerts.id, alertId));
+  }
+
+  public async markAllAlertsSeenForWell(wellId: string): Promise<void> {
+    await db.update(alerts)
+      .set({ seen_at: new Date() })
+      .where(and(eq(alerts.well_id, wellId), isNull(alerts.seen_at)));
   }
 }
 

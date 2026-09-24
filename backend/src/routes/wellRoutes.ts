@@ -8,6 +8,7 @@ const router = Router();
 
 // Public / optional-auth
 router.get('/nearby', validate(nearbyQuerySchema, 'query'), wellController.getNearbyWells);
+router.get('/stats/global', optionalAuth, wellController.getGlobalWellStats);
 router.get('/', validate(listWellsQuerySchema, 'query'), optionalAuth, wellController.listWells);
 router.get('/:id', optionalAuth, wellController.getWell);
 

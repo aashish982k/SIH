@@ -27,6 +27,12 @@ export async function getNearbyWells(req: AuthRequest, res: Response, next: Next
   } catch (err) { next(err); }
 }
 
+export async function getGlobalWellStats(_req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    sendSuccess(res, { stats: await wellService.getGlobalWellStats() });
+  } catch (err) { next(err); }
+}
+
 export async function createWell(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     const well = await wellService.createWell(req.body);

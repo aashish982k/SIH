@@ -13,16 +13,27 @@ import { useAppStore } from '@/store/appStore';
 export function useRTMACFeed() {
   const updateRtmacData = useAppStore(s => s.updateRtmacData);
   const setConnected = useAppStore(s => s.setRTMACConnected);
+  const addAlert = useAppStore(s => s.addAlert);
+  const activeWellId = useAppStore(s => s.activeWellId);
   const transportRef = useRef<RTMACTransport | null>(null);
 
   useEffect(() => {
-    const transport = createTransport();
+    if (!activeWellId) return;
+
+    const transport = createTransport(activeWellId);
     transportRef.current = transport;
 
     transport.connect(
       (data) => {
         updateRtmacData(data);
         setConnected(true);
+      },
+      (alertData) => {
+        // Map backend alert to frontend Alert type if necessary, or just add
+        addAlert({
+          ...alertData,
+          status: 'new'
+        });
       },
       (err) => {
         console.error('[RTMAC]', err.message);
@@ -36,5 +47,5 @@ export function useRTMACFeed() {
       transport.disconnect();
       setConnected(false);
     };
-  }, [updateRtmacData, setConnected]);
+  }, [updateRtmacData, setConnected, addAlert, activeWellId]);
 }

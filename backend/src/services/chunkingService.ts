@@ -1,6 +1,6 @@
 export interface ChunkMetadata {
-  documentId?: number;
-  wellId?: number;
+  documentId?: string;
+  wellId?: string;
   documentType?: string;
   formation?: string;
   depth?: number;
@@ -10,6 +10,7 @@ export interface ChunkMetadata {
 
 export interface DocumentChunk {
   text: string;
+  chunkIndex: number;
   metadata: ChunkMetadata;
 }
 
@@ -38,6 +39,7 @@ export class ChunkingService {
         if (currentChunk.length > 0) {
           chunks.push({
             text: currentChunk.trim(),
+            chunkIndex: chunks.length,
             metadata: { ...baseMetadata }
           });
         }
@@ -50,6 +52,7 @@ export class ChunkingService {
     if (currentChunk.length > 0) {
       chunks.push({
         text: currentChunk.trim(),
+        chunkIndex: chunks.length,
         metadata: { ...baseMetadata }
       });
     }

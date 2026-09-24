@@ -112,15 +112,19 @@ export function timeAgo(isoString: string): string {
   const diff = Date.now() - new Date(isoString).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
+  const rtf = new Intl.RelativeTimeFormat('en-US', { numeric: 'auto' });
+  if (mins < 60) return rtf.format(-mins, 'minute');
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
+  if (hrs < 24) return rtf.format(-hrs, 'hour');
   const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
+  return rtf.format(-days, 'day');
 }
 
+// Shared Intl formatter (locale-aware, created once).
+const dateFormatter = new Intl.DateTimeFormat('en-US', {
+  year: 'numeric', month: 'short', day: 'numeric',
+});
+
 export function formatDate(isoString: string): string {
-  return new Date(isoString).toLocaleDateString('en-US', {
-    year: 'numeric', month: 'short', day: 'numeric'
-  });
+  return dateFormatter.format(new Date(isoString));
 }

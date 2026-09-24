@@ -1,20 +1,24 @@
 import http from 'http';
 import app from './app';
 import { env } from './config/env';
-import { checkConnection } from './config/db';
+
 import { ensureCollection, checkQdrantConnection } from './config/qdrant';
 import { initWebSocket } from './websocket';
+import { resumePendingDocuments } from './services/documentService';
 
 async function bootstrap(): Promise<void> {
-  // ── Verify MySQL ───────────────────────────────────────────────
-  console.log('🔌  Connecting to MySQL...');
-  await checkConnection();
-  console.log('✅  MySQL connected');
-
-  // ── Verify + setup Qdrant ──────────────────────────────────────
+  // ── MySQL Connection is established implicitly on first query ──
+  // ── Verify + setup Qdrant (non-fatal) ─────────────────────────
   console.log('🔌  Connecting to Qdrant...');
-  await checkQdrantConnection();
-  await ensureCollection();
+  try {
+    await checkQdrantConnection();
+    await ensureCollection();
+  } catch (err: any) {
+    console.warn('⚠️   Qdrant unavailable — semantic search will be disabled.');
+    console.warn('    Start Qdrant with: docker run -p 6333:6333 qdrant/qdrant');
+    console.warn(`    Error: ${err?.message ?? err}`);
+  }
+  void resumePendingDocuments().catch((err) => console.warn('⚠️ Unable to resume document processing:', err?.message ?? err));
 
   // ── HTTP + WebSocket server ────────────────────────────────────
   const httpServer = http.createServer(app);

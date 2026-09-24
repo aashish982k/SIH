@@ -38,12 +38,19 @@ async function setupQdrant(): Promise<void> {
   ];
 
   for (const { field, type } of payloadIndexes) {
-    await client.createPayloadIndex(collectionName, {
-      field_name: field,
-      field_schema: type,
-    });
+    try {
+      await client.createPayloadIndex(collectionName, {
+        field_name: field,
+        field_schema: type,
+      });
+    } catch (err: any) {
+      const message = String(err?.message ?? err);
+      if (!message.toLowerCase().includes('already exists')) {
+        throw err;
+      }
+    }
   }
-  console.log('✅  Payload indexes created');
+  console.log('✅  Payload indexes verified');
   console.log('✅  Qdrant setup complete');
 }
 

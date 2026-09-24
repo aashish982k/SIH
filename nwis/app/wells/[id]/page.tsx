@@ -1,7 +1,8 @@
 'use client';
 
-import { use, useState } from 'react';
+import { use, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { MOCK_WELLS } from '@/lib/mock/wells';
 import { getIncidentsForWell } from '@/lib/mock/incidents';
@@ -20,17 +21,17 @@ import {
 } from 'lucide-react';
 import type { Incident } from '@/lib/types';
 import { useAppStore } from '@/store/appStore';
-import { ScatterChart, Scatter, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { ScatterChart, Scatter, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from 'recharts';
 
 // ─── Formation Depth Log (custom SVG) ────────────────────────────────────────
 function FormationLog({ formations }: { formations: typeof MOCK_WELLS[0]['formations'] }) {
   const maxDepth = formations[formations.length - 1]?.depthBaseFt ?? 12000;
-  const svgHeight = 360;
+  const logHeight = 600;
 
   return (
     <div className="flex gap-4">
       {/* Depth axis */}
-      <div className="flex flex-col justify-between text-right py-1" style={{ height: svgHeight }}>
+      <div className="flex flex-col justify-between text-right py-1" style={{ height: logHeight }}>
         {[0, 0.25, 0.5, 0.75, 1].map(frac => (
           <span key={frac} className="text-[10px] font-mono text-muted-foreground">
             {formatDepth(maxDepth * frac)} ft
@@ -39,38 +40,33 @@ function FormationLog({ formations }: { formations: typeof MOCK_WELLS[0]['format
       </div>
 
       {/* Formation column */}
-      <div className="relative flex-1 rounded-lg overflow-hidden border border-border/60" style={{ height: svgHeight }}>
-        <svg width="100%" height={svgHeight} viewBox={`0 0 200 ${svgHeight}`} preserveAspectRatio="none">
-          {formations.map((f, i) => {
-            const y1 = (f.depthTopFt / maxDepth) * svgHeight;
-            const y2 = (f.depthBaseFt / maxDepth) * svgHeight;
-            const height = y2 - y1;
-            return (
-              <g key={f.id}>
-                <motion.rect
-                  x={0} y={y1} width={200} height={height}
-                  fill={f.color}
-                  fillOpacity={0.7}
-                  initial={{ scaleY: 0, originY: 0 }}
-                  animate={{ scaleY: 1 }}
-                  transition={{ delay: i * 0.08, duration: 0.4, ease: 'easeOut' }}
-                />
-                {height > 20 && (
-                  <text
-                    x={100} y={y1 + height / 2 + 4}
-                    textAnchor="middle"
-                    fontSize={height > 35 ? 10 : 8}
-                    fill="rgba(255,255,255,0.9)"
-                    fontWeight="600"
-                    fontFamily="Inter, sans-serif"
-                  >
-                    {f.name}
-                  </text>
-                )}
-              </g>
-            );
-          })}
-        </svg>
+      <div className="relative flex-1 rounded-lg overflow-hidden border border-border/60" style={{ height: logHeight }}>
+        {formations.map((f, i) => {
+          const topPercent = (f.depthTopFt / maxDepth) * 100;
+          const heightPercent = ((f.depthBaseFt - f.depthTopFt) / maxDepth) * 100;
+          
+          return (
+            <motion.div
+              key={f.id}
+              className="absolute left-0 w-full flex items-center justify-center border-b border-black/10 last:border-0"
+              style={{ 
+                top: `${topPercent}%`, 
+                height: `${heightPercent}%`,
+                backgroundColor: f.color,
+                opacity: 0.85
+              }}
+              initial={{ scaleY: 0, originY: 0 }}
+              animate={{ scaleY: 1 }}
+              transition={{ delay: i * 0.08, duration: 0.4, ease: 'easeOut' }}
+            >
+              {heightPercent > 4 && (
+                <span className="text-white/90 font-semibold text-sm tracking-wide drop-shadow-md">
+                  {f.name}
+                </span>
+              )}
+            </motion.div>
+          );
+        })}
       </div>
 
       {/* Legend */}
@@ -111,6 +107,7 @@ function IncidentTimeline({ incidents }: { incidents: Incident[] }) {
       <div className="h-48 mb-4">
         <ResponsiveContainer width="100%" height="100%">
           <ScatterChart margin={{ top: 8, right: 8, bottom: 20, left: 40 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
             <XAxis
               dataKey="index" type="number"
               label={{ value: 'Incident #', position: 'insideBottom', offset: -10, fontSize: 10 }}
@@ -194,9 +191,49 @@ export default function WellDetailPage({ params }: { params: Promise<{ id: strin
   const { activeWell } = useAppStore();
   const [activeSection, setActiveSection] = useState('overview');
 
-  const well = MOCK_WELLS.find(w => w.id === id);
+  const [well, setWell] = useState<typeof MOCK_WELLS[number] | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/wells/${encodeURIComponent(id)}`, { cache: 'no-store' })
+      .then(async response => {
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.message || payload.error || 'Well not found');
+        return payload.data?.well;
+      })
+      .then((row) => {
+        if (cancelled || !row) return;
+        setWell({
+          id: String(row.id),
+          name: String(row.name),
+          block: String(row.block ?? ''),
+          field: String(row.field_name ?? ''),
+          operator: String(row.operator ?? ''),
+          status: row.status,
+          coordinates: { lat: Number(row.latitude), lng: Number(row.longitude) },
+          spudDate: String(row.spud_date ?? ''),
+          completionDate: row.completion_date ? String(row.completion_date) : undefined,
+          totalDepthFt: Number(row.total_depth_ft ?? 0),
+          currentDepthFt: Number(row.total_depth_ft ?? 0),
+          measuredDepthFt: Number(row.total_depth_ft ?? 0),
+          trueVerticalDepthFt: Number(row.total_depth_ft ?? 0),
+          inclination: 0,
+          azimuth: 0,
+          casingProgram: [],
+          formations: [],
+          incidents: [],
+        });
+      })
+      .catch(() => { if (!cancelled) setWell(null); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [id]);
   const incidents = well ? getIncidentsForWell(well.id) : [];
   const reports = MOCK_REPORTS.filter(r => r.wellId === id);
+
+  if (loading) {
+    return <div className="flex items-center justify-center h-64 text-sm text-muted-foreground">Loading well details…</div>;
+  }
 
   if (!well) {
     return (
@@ -212,13 +249,16 @@ export default function WellDetailPage({ params }: { params: Promise<{ id: strin
   return (
     <div className="mx-auto max-w-[1400px] px-4 md:px-6 py-6">
       {/* Back button */}
-      <button
-        onClick={() => router.back()}
-        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-5"
+      <Link
+        href="/map"
+        className={cn(
+          'inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-5',
+          'focus-visible:ring-2 focus-visible:ring-ring rounded outline-none'
+        )}
       >
-        <ArrowLeft className="w-4 h-4" />
+        <ArrowLeft aria-hidden="true" className="w-4 h-4" />
         Back to Map
-      </button>
+      </Link>
 
       {/* ── Well Header ─────────────────────────────────────────────────── */}
       <motion.div
@@ -250,14 +290,13 @@ export default function WellDetailPage({ params }: { params: Promise<{ id: strin
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={() => router.push(`/compare?a=${activeWell?.id}&b=${well.id}`)}
+          <Link
+            href={`/compare?a=${activeWell?.id}&b=${well.id}`}
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 text-sm font-medium hover:bg-muted hover:text-foreground transition-colors focus-visible:ring-2 focus-visible:ring-ring outline-none"
           >
-            <GitCompare className="w-4 h-4" />
+            <GitCompare aria-hidden="true" className="w-4 h-4" />
             Compare with Active Well
-          </Button>
+          </Link>
         </div>
       </motion.div>
 

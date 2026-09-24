@@ -36,7 +36,35 @@ The backend is a Node.js/Express server written in TypeScript.
    ```
    *The backend will be running on `http://localhost:5000`.*
 
-## 3. Start the Frontend
+## 3. Start the ML Service (Python)
+The Random Forest risk model and the reranker run in a Python FastAPI service (`backend/ml/`).
+1. Open a new terminal and navigate to the ML directory:
+   ```bash
+   cd backend/ml
+   ```
+2. Create a virtual environment (first time only) and install dependencies:
+   ```bash
+   python -m venv .venv
+   .venv\Scripts\pip install -r requirements.txt      # Windows
+   # .venv/bin/pip install -r requirements.txt        # macOS/Linux
+   ```
+3. (First time only) Generate the synthetic dataset and train the model:
+   ```bash
+   .venv\Scripts\python -m nwis_ml.generate_dataset
+   .venv\Scripts\python -m nwis_ml.train --version v1.0.1
+   ```
+   Metrics are written to `ml/models/random_forest_<version>/metadata.json`.
+4. Start the service:
+   ```bashpython -m uvicorn nwis_ml.service:app --port 8100
+   .venv\Scripts\python -m uvicorn nwis_ml.service:app --port 8100
+   ```
+   *The ML service will be running on `http://localhost:8100` (see `/health`).*
+
+   If the service is not running, the backend falls back to a labeled heuristic stub for risk prediction, and hybrid search returns RRF-fused results without cross-encoder reranking — everything keeps working, just without ML.
+
+   Optional (cross-encoder reranking): `pip install sentence-transformers`, then set `RERANKER_MODEL` in the environment and restart the ML service. Without it, `/rerank` uses lexical BM25 scoring.
+
+## 4. Start the Frontend
 The frontend is a Next.js application.
 1. Open a new terminal and navigate to the frontend directory:
    ```bash

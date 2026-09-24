@@ -1,20 +1,21 @@
 'use client';
 
 import { Suspense, use, useState, useMemo } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { MOCK_WELLS } from '@/lib/mock/wells';
 import { getIncidentsForWell } from '@/lib/mock/incidents';
 import { cn, getRiskBgClass, getRiskLabel, getIncidentLabel, getIncidentColor, formatDepth, formatDate } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { ArrowLeft, GitCompare, AlertTriangle, Layers } from 'lucide-react';
 import type { Well } from '@/lib/types';
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend, CartesianGrid
 } from 'recharts';
 
 // ─── Compare Panel ─────────────────────────────────────────────────────────────
@@ -109,7 +110,6 @@ function WellPanel({ well, label }: { well: Well; label: string }) {
 
 // ─── Compare Content (inner) ──────────────────────────────────────────────────
 function CompareContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [wellAId, setWellAId] = useState(searchParams.get('a') ?? MOCK_WELLS[0].id);
   const [wellBId, setWellBId] = useState(searchParams.get('b') ?? MOCK_WELLS[1].id);
@@ -129,46 +129,56 @@ function CompareContent() {
     color: getIncidentColor(type),
   }));
 
-  const diffMetrics = [
+  type Better = 'none' | 'lower' | 'higher';
+  const diffMetrics: Array<{
+    label: string;
+    a: number;
+    b: number;
+    format: (v: number) => string;
+    better: Better;
+  }> = [
     {
       label: 'Total Depth',
       a: wellA.totalDepthFt,
       b: wellB.totalDepthFt,
       format: (v: number) => `${formatDepth(v)} ft`,
-      better: 'none' as const,
+      better: 'none',
     },
     {
       label: 'Inclination',
       a: wellA.inclination,
       b: wellB.inclination,
       format: (v: number) => `${v}°`,
-      better: 'lower' as const,
+      better: 'lower',
     },
     {
       label: 'Incidents',
       a: incidentsA.length,
       b: incidentsB.length,
       format: (v: number) => `${v}`,
-      better: 'lower' as const,
+      better: 'lower',
     },
     {
       label: 'High-Risk Incidents',
       a: incidentsA.filter(i => i.severity === 'high' || i.severity === 'critical').length,
       b: incidentsB.filter(i => i.severity === 'high' || i.severity === 'critical').length,
       format: (v: number) => `${v}`,
-      better: 'lower' as const,
+      better: 'lower',
     },
   ];
 
   return (
     <div className="mx-auto max-w-[1400px] px-4 md:px-6 py-8">
       {/* Back */}
-      <button
-        onClick={() => router.back()}
-        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-5 transition-colors"
+      <Link
+        href="/map"
+        className={cn(
+          'inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-5 transition-colors',
+          'focus-visible:ring-2 focus-visible:ring-ring rounded outline-none'
+        )}
       >
-        <ArrowLeft className="w-4 h-4" />Back
-      </button>
+        <ArrowLeft aria-hidden="true" className="w-4 h-4" />Back to Map
+      </Link>
 
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
@@ -183,9 +193,11 @@ function CompareContent() {
           { label: 'Well B', value: wellBId, onChange: setWellBId },
         ].map(({ label, value, onChange }) => (
           <div key={label}>
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">{label}</p>
+            <Label htmlFor={`select-${label}`} className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
+              {label}
+            </Label>
             <Select value={value} onValueChange={(v) => v && onChange(v as string)}>
-              <SelectTrigger>
+              <SelectTrigger id={`select-${label}`}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -201,18 +213,32 @@ function CompareContent() {
       {/* Diff Metrics Band */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         {diffMetrics.map(({ label, a, b, format, better }) => {
-          const aIsBetter = better === 'lower' ? a <= b : (better as string) === 'higher' ? a >= b : false;
-          const bIsBetter = better === 'lower' ? b <= a : (better as string) === 'higher' ? b >= a : false;
+          // 'lower' = smaller value is better; 'higher' = larger is better.
+          // Equal values: neither side is highlighted.
+          const aIsBetter = better === 'lower' ? a < b : better === 'higher' ? a > b : false;
+          const bIsBetter = better === 'lower' ? b < a : better === 'higher' ? b > a : false;
           return (
             <Card key={label} className="border-border/60">
               <CardContent className="px-4 py-3">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">{label}</p>
                 <div className="flex items-center justify-between gap-2">
-                  <span className={cn('font-mono text-sm font-bold', aIsBetter && better !== 'none' ? 'text-[var(--risk-low)]' : 'text-foreground')}>
+                  <span
+                    aria-label={`Well A: ${format(a)}${aIsBetter ? ' (better)' : ''}`}
+                    className={cn(
+                      'font-mono text-sm font-bold tabular-nums',
+                      aIsBetter ? 'text-[var(--risk-low)]' : 'text-foreground'
+                    )}
+                  >
                     {format(a)}
                   </span>
                   <span className="text-[10px] text-muted-foreground">vs</span>
-                  <span className={cn('font-mono text-sm font-bold', (better as string) === 'higher' && "text-[var(--risk-high)]", better === 'lower' && "text-[var(--risk-low)]")}>
+                  <span
+                    aria-label={`Well B: ${format(b)}${bIsBetter ? ' (better)' : ''}`}
+                    className={cn(
+                      'font-mono text-sm font-bold tabular-nums',
+                      bIsBetter ? 'text-[var(--risk-low)]' : 'text-foreground'
+                    )}
+                  >
                     {format(b)}
                   </span>
                 </div>
@@ -243,6 +269,7 @@ function CompareContent() {
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} margin={{ top: 8, right: 16, bottom: 20, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                 <XAxis
                   dataKey="name" tick={{ fontSize: 10 }}
                   tickFormatter={v => v.length > 14 ? v.slice(0, 14) + '…' : v}

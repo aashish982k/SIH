@@ -1,11 +1,13 @@
 import { Router } from 'express';
-import { getNearbyIntelligence } from '../controllers/intelligenceController';
+import { getWellIntelligence, getNearbyIntelligence } from '../controllers/intelligenceController';
 import { authenticate } from '../middleware/authMiddleware';
 
 const router = Router();
 
 router.use(authenticate);
 
-router.get('/:wellId/nearby', getNearbyIntelligence);
+// Static segment first so /wells/:wellId/nearby doesn't collide.
+router.get('/wells/:wellId/nearby', getNearbyIntelligence);
+router.get('/wells/:wellId', getWellIntelligence);
 
 export default router;

@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1790090869438,
+      "tag": "0000_add_alerts_table",
+      "breakpoints": true
+    }
+  ]
+}

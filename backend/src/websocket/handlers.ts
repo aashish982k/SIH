@@ -2,8 +2,12 @@ import { Server, Socket } from 'socket.io';
 import { WS_EVENTS } from './events';
 import { riskFeatureService } from '../services/riskFeatureService';
 import { riskPredictionService } from '../services/riskPredictionService';
-import { alertService } from '../services/alertService';
+import { riskService } from '../services/riskService';
 import { recommendationService } from '../services/recommendationService';
+import { alertService } from '../services/alertService';
+
+const lastPipelineRun = new Map<string, number>();
+const DEBOUNCE_MS = Number(process.env.WS_PIPELINE_DEBOUNCE_MS ?? 15_000);
 
 /**
  * Register all socket event handlers for an authenticated connection.
@@ -51,20 +55,80 @@ export function registerHandlers(io: Server, socket: Socket): void {
         data
       );
 
+      // Debounce check (15s)
+      const now = Date.now();
+      const lastRun = lastPipelineRun.get(data.well_id) ?? 0;
+      if (now - lastRun < DEBOUNCE_MS) return;
+      lastPipelineRun.set(data.well_id, now);
+
       // 3. Predict risk
       const prediction = await riskPredictionService.predictRisk(features);
 
-      // 4. If high risk, generate alert & recommendations
-      if (prediction.risk_score > 0.7) {
-        const alert = await alertService.createAlert(
-          data.well_id,
-          prediction.risk_type,
-          `High risk of ${prediction.risk_type} detected (score: ${prediction.risk_score})`,
-          prediction.risk_score > 0.8 ? 'critical' : 'warning'
-        );
-        broadcastAlert(io, data.well_id, alert);
+      // 4. Persist risks + generate alert/recommendations when a dangerous
+      // risk crosses the high threshold (READEME §31-32).
+      const top = prediction.top_risk;
+      if (top && top.type !== 'normal' && top.probability > 0.7) {
+        const { risk, created } = await riskService.createRisk({
+          wellId: data.well_id,
+          riskType: top.type,
+          probability: top.probability,
+          depthFt: features?.current_depth ?? data?.depth ?? null,
+          message: `High risk of ${top.type} detected (score: ${top.probability})`,
+          source: prediction.source === 'rag_llm' ? 'rag_llm' : 'ml_model',
+          confidence: 0.82,
+          reasoning: prediction.reasoning,
+          evidence: prediction.evidence,
+          recommendation: prediction.recommendation,
+        });
+        broadcastRisk(io, data.well_id, risk, created ? WS_EVENTS.RISK_DETECTED : WS_EVENTS.RISK_UPDATED);
 
-        const recs = await recommendationService.generateRecommendations(prediction.risk_type, data.well_id);
+        const evidence = prediction.evidence ?? [];
+
+        // Step 5 — Persist alert to MySQL
+        const alertId = await alertService.createAlert({
+          wellId: data.well_id,
+          riskId: risk?.id ?? null,
+          alertType: top.type,
+          severity: top.severity.toLowerCase() as 'low'|'medium'|'high'|'critical',
+          payload: {
+            depth: features?.current_depth ?? null,
+            formation: features?.formation ?? null,
+            probability: top.probability,
+            modelVersion: prediction.model_version,
+            evidence: evidence.slice(0, 3).map((e: any) => ({
+              chunk_text: e.chunk_text?.substring(0, 200),
+              well_name: e.well_name,
+              event_type: e.event_type,
+              depth_ft: e.depth_ft,
+            })),
+          },
+        });
+
+        // Step 6 — Emit alert:new
+        io.to(`well:${data.well_id}`).emit(WS_EVENTS.ALERT_NEW, {
+          id: alertId,
+          wellId: data.well_id,
+          depth: features?.current_depth ?? null,
+          riskType: top.type,
+          probability: top.probability,
+          severity: top.severity,
+          formation: features?.formation ?? null,
+          modelVersion: prediction.model_version,
+          historicalEvidence: evidence.slice(0, 3),
+          timestamp: new Date().toISOString(),
+        });
+
+        const recs = await recommendationService.generateRecommendations(top.type, data.well_id, {
+          riskId: risk?.id ?? null,
+          depth: features?.current_depth ?? null,
+          formation: features?.formation ?? null,
+          evidence: evidence.slice(0, 3).map((e: any) => ({
+            chunk_text: e.chunk_text,
+            well_name: e.well_name,
+            event_type: e.event_type,
+            depth_ft: e.depth_ft
+          }))
+        });
         recs.forEach(rec => broadcastRecommendation(io, data.well_id, rec));
       }
     } catch (err) {
@@ -81,11 +145,22 @@ export function registerHandlers(io: Server, socket: Socket): void {
 // ── Server-side broadcast helpers ─────────────────────────────
 
 /**
- * Broadcast a new alert to all clients subscribed to a well room.
- * Part 2 will call this from the risk engine.
+ * Broadcast a risk record (detected or updated) to a well room.
  */
-export function broadcastAlert(io: Server, wellId: string, alert: any): void {
-  io.to(`well:${wellId}`).emit(WS_EVENTS.ALERT_NEW, alert);
+export function broadcastRisk(
+  io: Server,
+  wellId: string,
+  risk: any,
+  event: typeof WS_EVENTS.RISK_DETECTED | typeof WS_EVENTS.RISK_UPDATED = WS_EVENTS.RISK_DETECTED
+): void {
+  io.to(`well:${wellId}`).emit(event, risk);
+}
+
+/**
+ * Broadcast knowledge search results to a well room (knowledge:result).
+ */
+export function broadcastKnowledgeResult(io: Server, wellId: string, payload: any): void {
+  io.to(`well:${wellId}`).emit(WS_EVENTS.KNOWLEDGE_RESULT, payload);
 }
 
 /**

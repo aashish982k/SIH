@@ -1,71 +1,90 @@
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { useRouter } from 'next/navigation';
 import { getIncidentsForWell } from '@/lib/mock/incidents';
 import { getRiskLabel, getIncidentLabel, formatDepth, formatDistance } from '@/lib/utils';
-import type { Well, RiskLevel } from '@/lib/types';
+import type { Well } from '@/lib/types';
 
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? '';
 
+// ─── Popup theme — dark graphite, hex mirrors of globals.css tokens ──────────
+// (Mapbox popups render outside React; inline styles need concrete values.)
+const POPUP_COLORS = {
+  text: '#F4F6FB',
+  muted: '#94a3b8',
+  bg: '#0D1C42',
+  high: '#EF4444',
+  medium: '#F59E0B',
+  ok: '#124375',
+  accent: '#FCF1D0',
+  accentHover: '#F5E6B8',
+  accentText: '#010736',
+};
+
 // ─── Marker Color by risk/incident history ────────────────────────────────────
 function getMarkerColor(well: Well, isActive = false): string {
-  if (isActive) return '#0F4C81';
+  if (isActive) return POPUP_COLORS.accent;
   const incidents = getIncidentsForWell(well.id);
-  if (incidents.some(i => i.severity === 'critical' || i.severity === 'high')) return '#DC2626';
-  if (incidents.some(i => i.severity === 'medium')) return '#D97706';
-  return '#16A34A';
+  if (incidents.some(i => i.severity === 'critical' || i.severity === 'high')) return POPUP_COLORS.high;
+  if (incidents.some(i => i.severity === 'medium')) return POPUP_COLORS.medium;
+  return POPUP_COLORS.ok;
 }
 
-// ─── Create popup HTML ────────────────────────────────────────────────────────
-function createPopupHTML(well: Well, distance?: number, onViewDetails?: (id: string) => void): string {
+// ─── Popup HTML — dark theme, real <a> navigation (keyboard + Cmd-click ok) ───
+function createPopupHTML(well: Well, distance?: number, reportCount = 0): string {
   const incidents = getIncidentsForWell(well.id);
   const highRisk = incidents.filter(i => i.severity === 'high' || i.severity === 'critical');
   const color = getMarkerColor(well);
+  const c = POPUP_COLORS;
 
   return `
-    <div style="font-family: Inter, system-ui, sans-serif; padding: 14px; min-width: 220px;">
+    <div style="font-family: Inter, system-ui, sans-serif; padding: 14px; min-width: 220px; background:${c.bg};">
       <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
         <div style="width:8px; height:8px; border-radius:50%; background:${color}; flex-shrink:0;"></div>
         <div>
-          <p style="font-weight:700; font-size:14px; color:#0F172A; margin:0; line-height:1.2;">${well.name}</p>
-          <p style="font-size:11px; color:#64748B; margin:0; margin-top:2px;">${well.field} · ${well.block}</p>
+          <p style="font-weight:700; font-size:14px; color:${c.text}; margin:0; line-height:1.2;">${well.name}</p>
+          <p style="font-size:11px; color:${c.muted}; margin:0; margin-top:2px;">${well.field} · ${well.block}</p>
+        </div>
+        <div>
+          <p style="font-size:10px; color:${c.muted}; text-transform:uppercase; letter-spacing:0.05em; margin:0 0 2px;">Reports</p>
+          <p style="font-size:13px; font-weight:600; color:${c.text}; margin:0;">${reportCount}</p>
         </div>
       </div>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;">
         ${distance !== undefined ? `
           <div>
-            <p style="font-size:10px; color:#64748B; text-transform:uppercase; letter-spacing:0.05em; margin:0 0 2px;">Distance</p>
-            <p style="font-size:13px; font-weight:600; font-family:JetBrains Mono,monospace; color:#0F172A; margin:0;">${formatDistance(distance)}</p>
+            <p style="font-size:10px; color:${c.muted}; text-transform:uppercase; letter-spacing:0.05em; margin:0 0 2px;">Distance</p>
+            <p style="font-size:13px; font-weight:600; font-family:JetBrains Mono,monospace; color:${c.text}; margin:0;">${formatDistance(distance)}</p>
           </div>
         ` : ''}
         <div>
-          <p style="font-size:10px; color:#64748B; text-transform:uppercase; letter-spacing:0.05em; margin:0 0 2px;">Total Depth</p>
-          <p style="font-size:13px; font-weight:600; font-family:JetBrains Mono,monospace; color:#0F172A; margin:0;">${formatDepth(well.totalDepthFt)} ft</p>
+          <p style="font-size:10px; color:${c.muted}; text-transform:uppercase; letter-spacing:0.05em; margin:0 0 2px;">Total Depth</p>
+          <p style="font-size:13px; font-weight:600; font-family:JetBrains Mono,monospace; color:${c.text}; margin:0;">${formatDepth(well.totalDepthFt)} ft</p>
         </div>
         <div>
-          <p style="font-size:10px; color:#64748B; text-transform:uppercase; letter-spacing:0.05em; margin:0 0 2px;">Incidents</p>
-          <p style="font-size:13px; font-weight:600; color:${incidents.length > 0 ? (highRisk.length > 0 ? '#DC2626' : '#D97706') : '#16A34A'}; margin:0;">
+          <p style="font-size:10px; color:${c.muted}; text-transform:uppercase; letter-spacing:0.05em; margin:0 0 2px;">Incidents</p>
+          <p style="font-size:13px; font-weight:600; color:${incidents.length > 0 ? (highRisk.length > 0 ? c.high : c.medium) : c.ok}; margin:0;">
             ${incidents.length} ${highRisk.length > 0 ? `(${highRisk.length} high)` : ''}
           </p>
         </div>
         <div>
-          <p style="font-size:10px; color:#64748B; text-transform:uppercase; letter-spacing:0.05em; margin:0 0 2px;">Status</p>
-          <p style="font-size:12px; font-weight:600; color:#0F172A; text-transform:capitalize; margin:0;">${well.status}</p>
+          <p style="font-size:10px; color:${c.muted}; text-transform:uppercase; letter-spacing:0.05em; margin:0 0 2px;">Status</p>
+          <p style="font-size:12px; font-weight:600; color:${c.text}; text-transform:capitalize; margin:0;">${well.status}</p>
         </div>
       </div>
-      <button
-        onclick="window.__nwisViewDetails && window.__nwisViewDetails('${well.id}')"
-        style="width:100%; padding:8px 12px; background:#0F4C81; color:white; border:none; border-radius:8px;
-               font-size:12px; font-weight:600; cursor:pointer; font-family:Inter,system-ui,sans-serif;
+      <a
+        href="/wells/${well.id}"
+        style="display:block; text-align:center; padding:8px 12px; background:${c.accent}; color:${c.accentText}; border:none; border-radius:8px;
+               font-size:12px; font-weight:600; cursor:pointer; font-family:Inter,system-ui,sans-serif; text-decoration:none;
                transition:background 0.15s;"
-        onmouseover="this.style.background='#1a6aad'"
-        onmouseout="this.style.background='#0F4C81'"
-      >
-        View Details →
-      </button>
+        onmouseover="this.style.background='${c.accentHover}'"
+        onmouseout="this.style.background='${c.accent}'"
+      >View Well Details →</a>
+      <div style="margin-top:6px; font-size:9px; color:${c.muted}; text-align:center;">
+        ${incidents.length > 0 ? `${getIncidentLabel(incidents[0].type)} · ${getRiskLabel(incidents[0].severity)} risk` : 'No incidents recorded'}
+      </div>
     </div>
   `;
 }
@@ -73,24 +92,25 @@ function createPopupHTML(well: Well, distance?: number, onViewDetails?: (id: str
 // ─── Active well pulse marker ─────────────────────────────────────────────────
 function createActivePulseEl(): HTMLElement {
   const el = document.createElement('div');
-  el.style.cssText = `
-    width: 20px; height: 20px; position: relative;
-  `;
+  el.style.cssText = 'width: 20px; height: 20px; position: relative;';
   el.innerHTML = `
     <style>
       @keyframes nwis-pulse {
         0% { transform: scale(1); opacity: 0.8; }
         100% { transform: scale(2.8); opacity: 0; }
       }
+      @media (prefers-reduced-motion: reduce) {
+        .nwis-pulse-ring { animation: none !important; opacity: 0; }
+      }
     </style>
     <div style="
-      width:20px; height:20px; border-radius:50%; background:#0F4C81;
-      border: 3px solid white; box-shadow: 0 2px 8px rgba(15,76,129,0.4);
+      width:20px; height:20px; border-radius:50%; background:${POPUP_COLORS.accent};
+      border: 3px solid white; box-shadow: 0 2px 8px rgba(200,245,66,0.4);
       position: relative; z-index:2;
     "></div>
-    <div style="
-      position:absolute; top:0; left:0; width:20px; height:20px; border-radius:50%;
-      background:#0F4C81; opacity:0.6;
+    <div class="nwis-pulse-ring" style="
+      position:absolute; top:0; left:0; width:20px; height:20px;
+      border-radius:50%; background:${POPUP_COLORS.accent}; opacity:0.6;
       animation: nwis-pulse 2s cubic-bezier(0.4,0,0.6,1) infinite;
     "></div>
   `;
@@ -100,27 +120,25 @@ function createActivePulseEl(): HTMLElement {
 // ─── WellMap Component ────────────────────────────────────────────────────────
 interface WellMapProps {
   activeWell: Well;
-  nearbyWells: (Well & { distance: number })[];
+  mapCenter: { lat: number; lng: number };
+  nearbyWells: (Well & { distance: number; reportCount?: number })[];
   radius: number;
   selectedWellId: string | null;
   onWellClick: (wellId: string) => void;
   onViewDetails: (wellId: string) => void;
   liveDepthFt: number;
+  activeReportCount?: number;
+  onMapClick?: (coordinates: { lat: number; lng: number }) => void;
 }
 
 export default function WellMap({
-  activeWell, nearbyWells, radius, selectedWellId, onWellClick, onViewDetails, liveDepthFt
+  activeWell, mapCenter, nearbyWells, radius, selectedWellId, onWellClick, onViewDetails, liveDepthFt, activeReportCount = 0, onMapClick
 }: WellMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
+  const locationMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const circleLayerRef = useRef(false);
-
-  // Expose viewDetails to popup buttons
-  useEffect(() => {
-    (window as any).__nwisViewDetails = onViewDetails;
-    return () => { delete (window as any).__nwisViewDetails; };
-  }, [onViewDetails]);
 
   // Initialize map
   useEffect(() => {
@@ -129,7 +147,7 @@ export default function WellMap({
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
       style: 'mapbox://styles/mapbox/dark-v11',
-      center: [activeWell.coordinates.lng, activeWell.coordinates.lat],
+      center: [mapCenter.lng, mapCenter.lat],
       zoom: 10,
       attributionControl: false,
     });
@@ -137,28 +155,34 @@ export default function WellMap({
     map.current.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'bottom-right');
     map.current.addControl(new mapboxgl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 
+    const resizeObserver = new ResizeObserver(() => {
+      map.current?.resize();
+    });
+    resizeObserver.observe(mapContainer.current);
+
     map.current.on('load', () => {
       if (!map.current) return;
 
-      // ── Radius circle ─────────────────────────────────────────────────
-      const radiusKm = radius;
-      // GeoJSON circle (approximated with a polygon)
+      // ── Radius circle ───────────────────────────────────────────────
       const circleGeoJSON = createCircleGeoJSON(
-        activeWell.coordinates.lng, activeWell.coordinates.lat, radiusKm
+        mapCenter.lng, mapCenter.lat, radius
       );
 
       map.current.addSource('radius-circle', {
         type: 'geojson',
         data: circleGeoJSON,
       });
+      if (onMapClick) {
+        map.current.on('click', (event) => onMapClick({ lat: event.lngLat.lat, lng: event.lngLat.lng }));
+      }
 
       map.current.addLayer({
         id: 'radius-fill',
         type: 'fill',
         source: 'radius-circle',
         paint: {
-          'fill-color': '#2E86AB',
-          'fill-opacity': 0.08,
+          'fill-color': POPUP_COLORS.accent,
+          'fill-opacity': 0.06,
         },
       });
 
@@ -167,44 +191,45 @@ export default function WellMap({
         type: 'line',
         source: 'radius-circle',
         paint: {
-          'line-color': '#2E86AB',
+          'line-color': POPUP_COLORS.accent,
           'line-width': 1.5,
           'line-dasharray': [4, 3],
-          'line-opacity': 0.6,
+          'line-opacity': 0.5,
         },
       });
 
       circleLayerRef.current = true;
 
-      // ── Active well marker ────────────────────────────────────────────
-      const activeEl = createActivePulseEl();
-      const activePopup = new mapboxgl.Popup({ offset: 20, closeButton: false })
-        .setHTML(createPopupHTML(activeWell, undefined, onViewDetails));
-
-      new mapboxgl.Marker({ element: activeEl })
-        .setLngLat([activeWell.coordinates.lng, activeWell.coordinates.lat])
-        .setPopup(activePopup)
+      const locationEl = document.createElement('div');
+      locationEl.style.cssText = 'width:16px;height:16px;border-radius:50%;background:#38bdf8;border:3px solid white;box-shadow:0 0 0 6px #38bdf855;';
+      locationMarkerRef.current = new mapboxgl.Marker({ element: locationEl })
+        .setLngLat([mapCenter.lng, mapCenter.lat])
+        .setPopup(new mapboxgl.Popup({ offset: 14, closeButton: false }).setHTML('<strong>Your selected location</strong>'))
         .addTo(map.current);
     });
 
     return () => {
+      resizeObserver.disconnect();
+      locationMarkerRef.current?.remove();
+      locationMarkerRef.current = null;
       map.current?.remove();
       map.current = null;
       circleLayerRef.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [onMapClick]);
 
-  // Update radius circle when radius changes
   useEffect(() => {
-    if (!map.current || !circleLayerRef.current) return;
-    const src = map.current.getSource('radius-circle') as mapboxgl.GeoJSONSource | undefined;
-    if (src) {
-      src.setData(createCircleGeoJSON(
-        activeWell.coordinates.lng, activeWell.coordinates.lat, radius
-      ));
-    }
-  }, [radius, activeWell.coordinates]);
+    if (!map.current) return;
+    map.current.flyTo({
+      center: [mapCenter.lng, mapCenter.lat],
+      essential: true,
+      duration: 900,
+    });
+    const source = map.current.getSource('radius-circle') as mapboxgl.GeoJSONSource | undefined;
+    source?.setData(createCircleGeoJSON(mapCenter.lng, mapCenter.lat, radius));
+    locationMarkerRef.current?.setLngLat([mapCenter.lng, mapCenter.lat]);
+  }, [mapCenter, radius]);
 
   // Render/update nearby well markers
   useEffect(() => {
@@ -227,7 +252,7 @@ export default function WellMap({
       el.addEventListener('mouseleave', () => { el.style.transform = 'scale(1)'; });
 
       const popup = new mapboxgl.Popup({ offset: 16, closeButton: false, maxWidth: '260px' })
-        .setHTML(createPopupHTML(well, well.distance, onViewDetails));
+        .setHTML(createPopupHTML(well, well.distance, well.reportCount));
 
       const marker = new mapboxgl.Marker({ element: el })
         .setLngLat([well.coordinates.lng, well.coordinates.lat])
@@ -256,18 +281,29 @@ export default function WellMap({
       duration: 1200,
       essential: true,
     });
-    markersRef.current.get(selectedWellId)?.togglePopup();
+    const marker = markersRef.current.get(selectedWellId);
+    if (marker) {
+      const popup = marker.getPopup();
+      if (popup && !popup.isOpen()) {
+        marker.togglePopup();
+      }
+    }
   }, [selectedWellId, nearbyWells]);
 
   return (
-    <div ref={mapContainer} className="w-full h-full" />
+    <div
+      ref={mapContainer}
+      className="w-full h-full"
+      role="application"
+      aria-label="Map of nearby wells with incident risk markers"
+    />
   );
 }
 
 // ─── GeoJSON Circle Helper ────────────────────────────────────────────────────
 function createCircleGeoJSON(
   centerLng: number, centerLat: number, radiusKm: number, points = 64
-): any {
+): { type: 'Feature'; geometry: { type: 'Polygon'; coordinates: [number, number][][] }; properties: Record<string, never> } {
   const coords: [number, number][] = [];
   const distanceX = radiusKm / (111.32 * Math.cos((centerLat * Math.PI) / 180));
   const distanceY = radiusKm / 110.574;

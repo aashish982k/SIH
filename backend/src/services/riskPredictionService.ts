@@ -1,38 +1,38 @@
+/**
+ * Risk prediction service — hides the ML implementation from the rest of the
+ * backend. Risk scoring uses retrieved knowledge plus Grok; Python remains
+ * available to the retrieval pipeline for OCR/reranking.
+ */
+
+import { predictRiskWithRag, RagRiskResult } from './ragRiskService';
+
+export interface RiskPrediction {
+  prediction_id: string;
+  timestamp: string;
+  risks: Array<{ type: string; probability: number; severity: string }>;
+  top_risk: { type: string; probability: number; severity: string };
+  model: string;
+  model_version: string;
+  source: 'rag_llm' | 'fallback_stub';
+  reasoning?: string;
+  recommendation?: string;
+  evidence?: RagRiskResult['evidence'];
+}
+
 export class RiskPredictionService {
-  /**
-   * Stubbed risk prediction endpoint.
-   * In the future, this will call the Python ML microservice via HTTP/gRPC.
-   */
-  public async predictRisk(features: any): Promise<any> {
-    
-    // Simulate ML latency
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    // Basic heuristic for the stub
-    const pumpPressure = features.pump_pressure || 0;
-    const historicalHazards = features.historical_hazards_in_radius || 0;
-    
-    let riskScore = 0.1;
-    let riskType = 'none';
-
-    if (pumpPressure > 5000) {
-      riskScore = 0.85;
-      riskType = 'Overpressure';
-    } else if (pumpPressure < 1000 && pumpPressure > 0) {
-      riskScore = 0.75;
-      riskType = 'Mud Loss';
-    } else if (historicalHazards > 2) {
-      riskScore = 0.60;
-      riskType = 'Historical Hazard Risk';
-    }
-
+  public async predictRisk(features: any): Promise<RiskPrediction> {
+    const data = await predictRiskWithRag(features);
     return {
       prediction_id: `pred_${Date.now()}`,
       timestamp: new Date().toISOString(),
-      risk_score: riskScore,
-      risk_type: riskType,
-      confidence: 0.82,
-      model_version: 'stub-v1'
+      risks: data.risks,
+      top_risk: data.top_risk,
+      model: data.model,
+      model_version: data.model_version,
+      source: data.source,
+      reasoning: data.reasoning,
+      recommendation: data.recommendation,
+      evidence: data.evidence,
     };
   }
 }

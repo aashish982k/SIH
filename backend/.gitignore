@@ -3,3 +3,12 @@ dist/
 uploads/
 .env
 *.log
+
+# Python ML
+__pycache__/
+*.pyc
+.venv/
+venv/
+ml/models/*/
+ml/datasets/*.csv
+!ml/models/latest.json

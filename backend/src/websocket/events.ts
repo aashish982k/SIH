@@ -8,12 +8,19 @@ export const WS_EVENTS = {
   WELL_UPDATE:     'well:update',
   DRILLING_UPDATE: 'drilling:update',
 
+  // Risks (implementation.md §9.1 / READEME §34)
+  RISK_DETECTED: 'risk:detected',
+  RISK_UPDATED:  'risk:updated',
+
   // Alerts
   ALERT_NEW:    'alert:new',
   ALERT_UPDATE: 'alert:update',
 
   // Recommendations
   RECOMMENDATION_NEW: 'recommendation:new',
+
+  // Knowledge search results pushed to subscribers
+  KNOWLEDGE_RESULT: 'knowledge:result',
 
   // Client → Server: subscribe to a well room
   JOIN_WELL:  'well:join',

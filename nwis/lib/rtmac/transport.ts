@@ -4,12 +4,17 @@
 // Future:  WebSocketTransport | SSETransport (stubs ready below)
 
 import type { RTMACData, RiskLevel } from '@/lib/types';
+import { io, Socket } from 'socket.io-client';
 
 // ─── Transport Interface ───────────────────────────────────────────────────────
 
 export interface RTMACTransport {
   /** Start receiving data. Calls onData with each update, onError on failure. */
-  connect(onData: (data: RTMACData) => void, onError?: (err: Error) => void): void;
+  connect(
+    onData: (data: RTMACData) => void,
+    onAlert: (alert: any) => void,
+    onError?: (err: Error) => void
+  ): void;
   /** Stop receiving data and clean up resources. */
   disconnect(): void;
   /** Human-readable label shown in UI status indicator */
@@ -39,7 +44,11 @@ export class PollingTransport implements RTMACTransport {
   private currentRiskScore = 58;
   private ropTrend = 1; // direction of ROP drift
 
-  connect(onData: (data: RTMACData) => void, _onError?: (err: Error) => void): void {
+  connect(
+    onData: (data: RTMACData) => void,
+    onAlert: (alert: any) => void,
+    _onError?: (err: Error) => void
+  ): void {
     if (this.intervalId) return; // already connected
 
     const tick = () => {
@@ -84,44 +93,51 @@ export class PollingTransport implements RTMACTransport {
   }
 }
 
-// ─── 2. WebSocket Transport (STUB — ready for backend integration) ─────────────
-// To activate: replace PollingTransport with WebSocketTransport in useRTMACFeed.ts
-// Backend needs: ws://your-server/rtmac?wellId=well-001
-// Message format: JSON string matching RTMACData interface
+// ─── 2. Socket.IO Transport (ACTIVE — real backend integration) ───────────────
 
-export class WebSocketTransport implements RTMACTransport {
-  readonly label = 'WebSocket';
-  private ws: WebSocket | null = null;
+export class SocketIOTransport implements RTMACTransport {
+  readonly label = 'Socket.IO';
+  private socket: Socket | null = null;
   private url: string;
+  private wellId: string;
 
-  constructor(url: string) {
+  constructor(url: string, wellId: string) {
     this.url = url;
+    this.wellId = wellId;
   }
 
-  connect(onData: (data: RTMACData) => void, onError?: (err: Error) => void): void {
-    this.ws = new WebSocket(this.url);
+  connect(
+    onData: (data: RTMACData) => void,
+    onAlert: (alert: any) => void,
+    onError?: (err: Error) => void
+  ): void {
+    this.socket = io(this.url, {
+      auth: { token: 'mock-token' }, // Add token if auth middleware requires it
+    });
 
-    this.ws.onmessage = (event) => {
-      try {
-        const data: RTMACData = JSON.parse(event.data as string);
-        onData(data);
-      } catch {
-        onError?.(new Error('Failed to parse WebSocket message'));
-      }
-    };
+    this.socket.on('connect', () => {
+      this.socket?.emit('well:join', this.wellId);
+    });
 
-    this.ws.onerror = () => {
-      onError?.(new Error(`WebSocket connection error: ${this.url}`));
-    };
+    this.socket.on('drilling:update', (data: RTMACData) => {
+      onData(data);
+    });
 
-    this.ws.onclose = () => {
-      // Reconnect logic would go here (e.g., exponential backoff)
-    };
+    this.socket.on('alert:new', (alertData: any) => {
+      onAlert(alertData);
+    });
+
+    this.socket.on('connect_error', (err: Error) => {
+      onError?.(err);
+    });
   }
 
   disconnect(): void {
-    this.ws?.close();
-    this.ws = null;
+    if (this.socket) {
+      this.socket.emit('well:leave', this.wellId);
+      this.socket.disconnect();
+      this.socket = null;
+    }
   }
 }
 
@@ -139,7 +155,11 @@ export class SSETransport implements RTMACTransport {
     this.url = url;
   }
 
-  connect(onData: (data: RTMACData) => void, onError?: (err: Error) => void): void {
+  connect(
+    onData: (data: RTMACData) => void,
+    onAlert: (alert: any) => void,
+    onError?: (err: Error) => void
+  ): void {
     this.eventSource = new EventSource(this.url);
 
     this.eventSource.onmessage = (event) => {
@@ -169,6 +189,8 @@ export class SSETransport implements RTMACTransport {
 //   - WebSocket: new WebSocketTransport('ws://your-server/rtmac')
 //   - SSE:       new SSETransport('/api/rtmac/stream')
 
-export function createTransport(): RTMACTransport {
-  return new PollingTransport();
+export function createTransport(wellId: string = 'well-001'): RTMACTransport {
+  // Use backend URL from env, default to localhost:5000
+  const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:5000';
+  return new SocketIOTransport(wsUrl, wellId);
 }

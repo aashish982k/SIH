@@ -1,8 +1,28 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
+import { Inter, Space_Grotesk, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { Providers } from './providers';
+
+// Self-hosted via next/font — no render-blocking Google Fonts import.
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+  display: 'swap',
+});
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ['latin'],
+  variable: '--font-space-grotesk',
+  display: 'swap',
+});
+
+const jetbrains = JetBrains_Mono({
+  subsets: ['latin'],
+  variable: '--font-jetbrains',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: {
@@ -14,13 +34,23 @@ export const metadata: Metadata = {
   keywords: ['drilling', 'oil', 'wells', 'risk assessment', 'Oil India Limited', 'eRTMAC'],
 };
 
+export const viewport: Viewport = {
+  themeColor: '#010736',
+};
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className="min-h-screen flex flex-col bg-background antialiased">
+    <html lang="en" className={`${inter.variable} ${spaceGrotesk.variable} ${jetbrains.variable}`} suppressHydrationWarning>
+      <body className="min-h-screen flex flex-col bg-background text-foreground antialiased">
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-sm focus:font-semibold focus:text-primary-foreground"
+        >
+          Skip to main content
+        </a>
         <Providers>
           <Navbar />
-          <main className="flex-1">
+          <main id="main-content" className="flex-1">
             {children}
           </main>
           <Footer />

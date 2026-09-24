@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { MOCK_KNOWLEDGE } from '@/lib/mock/knowledge';
 import { cn, getRiskBgClass, getRiskLabel, getIncidentLabel, getIncidentColor, formatDepth, formatDate } from '@/lib/utils';
+import { fadeUp, staggerFast as stagger } from '@/lib/motion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -12,34 +14,26 @@ import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Slider } from '@/components/ui/slider';
-import { Label } from '@/components/ui/label';
 import {
-  Search, Filter, X, BookOpen, AlertTriangle,
-  FileText, ArrowRight, ChevronDown, Sparkles
+  Search, Filter, X, BookOpen,
+  FileText, ArrowRight, Sparkles
 } from 'lucide-react';
 import type { KnowledgeEntry, IncidentType, RiskLevel } from '@/lib/types';
 
 const PAGE_SIZE = 8;
 
-const fadeUp: any = {
-  hidden: { opacity: 0, y: 12 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } },
-};
-const stagger = { visible: { transition: { staggerChildren: 0.05 } } };
-
 // ─── Result Card ──────────────────────────────────────────────────────────────
-function ResultCard({ entry, onClick }: { entry: KnowledgeEntry; onClick: () => void }) {
+function ResultCard({ entry }: { entry: KnowledgeEntry }) {
   return (
     <motion.div variants={fadeUp}>
-      <Card
-        onClick={onClick}
+      <Link
+        href={`/wells/${entry.wellId}`}
+        aria-label={`${getIncidentLabel(entry.incidentType)} at ${entry.wellName} — ${entry.shortDescription}`}
         className={cn(
-          'border-border/60 card-hover cursor-pointer group',
-          'hover:border-primary/30 transition-colors',
-          `border-l-4 border-l-[${getIncidentColor(entry.incidentType)}]`
+          'block border-border/60 card-hover group rounded-lg outline-none',
+          'hover:border-primary/30 transition-colors focus-visible:ring-2 focus-visible:ring-ring'
         )}
-        style={{ borderLeftColor: getIncidentColor(entry.incidentType) }}
+        style={{ borderLeftColor: getIncidentColor(entry.incidentType), borderLeftWidth: 4 }}
       >
         <CardContent className="p-4">
           <div className="flex items-start justify-between gap-3">
@@ -92,7 +86,7 @@ function ResultCard({ entry, onClick }: { entry: KnowledgeEntry; onClick: () => 
             )}
           </div>
         </CardContent>
-      </Card>
+      </Link>
     </motion.div>
   );
 }
@@ -102,41 +96,97 @@ function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }
   return (
     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium border border-primary/20">
       {label}
-      <button onClick={onRemove} className="hover:text-destructive transition-colors">
-        <X className="w-3 h-3" />
+      <button
+        onClick={onRemove}
+        aria-label={`Remove filter: ${label}`}
+        className="hover:text-destructive transition-colors focus-visible:ring-2 focus-visible:ring-ring rounded outline-none"
+      >
+        <X aria-hidden="true" className="w-3 h-3" />
       </button>
     </span>
   );
 }
 
-// ─── Knowledge Repository Page ────────────────────────────────────────────────
-export default function KnowledgePage() {
+// ─── Knowledge Repository Page ──────────────────────────────────────────────
+function KnowledgeContent() {
   const router = useRouter();
-  const [query, setQuery] = useState('');
-  const [incidentFilter, setIncidentFilter] = useState<string>('all');
-  const [severityFilter, setSeverityFilter] = useState<string>('all');
-  const [formationFilter, setFormationFilter] = useState<string>('all');
+  const searchParams = useSearchParams();
+
+  // URL-synced filter state (deep-linkable, shareable)
+  const query = searchParams.get('q') ?? '';
+  const incidentFilter = searchParams.get('type') ?? 'all';
+  const severityFilter = searchParams.get('severity') ?? 'all';
+  const formationFilter = searchParams.get('formation') ?? 'all';
+
+  const updateParams = useCallback((updates: Record<string, string>) => {
+    const params = new URLSearchParams(searchParams.toString());
+    for (const [key, value] of Object.entries(updates)) {
+      if (!value || value === 'all') params.delete(key);
+      else params.set(key, value);
+    }
+    router.replace(`/knowledge${params.toString() ? `?${params}` : ''}`, { scroll: false });
+  }, [router, searchParams]);
+
+  const setQuery = useCallback((v: string) => updateParams({ q: v }), [updateParams]);
+  const setIncidentFilter = useCallback((v: string) => updateParams({ type: v }), [updateParams]);
+  const setSeverityFilter = useCallback((v: string) => updateParams({ severity: v }), [updateParams]);
+  const setFormationFilter = useCallback((v: string) => updateParams({ formation: v }), [updateParams]);
+
   const [page, setPage] = useState(1);
   const loaderRef = useRef<HTMLDivElement>(null);
 
-  // Filter + search logic
-  const filtered = useMemo(() => {
-    const q = query.toLowerCase().trim();
-    return MOCK_KNOWLEDGE.filter(entry => {
-      if (incidentFilter !== 'all' && entry.incidentType !== incidentFilter) return false;
-      if (severityFilter !== 'all' && entry.severity !== severityFilter) return false;
-      if (formationFilter !== 'all' && !entry.formation.toLowerCase().includes(formationFilter.toLowerCase())) return false;
-      if (!q) return true;
-      return (
-        entry.shortDescription.toLowerCase().includes(q) ||
-        entry.mitigation.toLowerCase().includes(q) ||
-        entry.lessonsLearned.toLowerCase().includes(q) ||
-        entry.wellName.toLowerCase().includes(q) ||
-        entry.formation.toLowerCase().includes(q) ||
-        getIncidentLabel(entry.incidentType).toLowerCase().includes(q)
-      );
-    });
+  const [results, setResults] = useState<KnowledgeEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Fetch search results from backend
+  const fetchResults = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const params = new URLSearchParams({ q: query || 'drilling incidents', limit: '50' });
+      if (incidentFilter !== 'all') params.set('event_type', incidentFilter);
+      if (severityFilter !== 'all') params.set('severity', severityFilter);
+      if (formationFilter !== 'all') params.set('formation', formationFilter);
+      const res = await fetch(`/api/knowledge?${params}`, { cache: 'no-store' });
+      const payload = await res.json();
+      const data = payload.data ?? payload;
+      
+      if (data.results) {
+        // Map backend chunk format to KnowledgeEntry
+        const mapped: KnowledgeEntry[] = data.results.map((r: Record<string, unknown>, idx: number) => ({
+          id: String(r.id || `res-${idx}`),
+          wellId: String(r.well_id || 'unknown'),
+          wellName: String(r.well_name || 'Unknown Well'),
+          incidentId: String(r.event_id || `evt-${idx}`),
+          incidentType: (r.event_type || 'other') as IncidentType,
+          severity: (r.severity || 'medium') as RiskLevel,
+          depthFt: r.depth_ft ? parseFloat(String(r.depth_ft)) : 0,
+          formation: String(r.formation_name || 'Unknown Formation'),
+          date: String(r.created_at || new Date().toISOString()),
+          shortDescription: r.chunk_text ? String(r.chunk_text).substring(0, 150) + '...' : '',
+          mitigation: r.chunk_text ? String(r.chunk_text).substring(150, 300) + '...' : '',
+          lessonsLearned: '',
+          sourceReportTitle: r.file_name ? String(r.file_name) : (r.document_id ? `Document ${String(r.document_id)}` : undefined)
+        }));
+        setResults(mapped);
+      } else {
+        setResults([]);
+      }
+    } catch (err) {
+      console.error('Search error', err);
+    } finally {
+      setIsLoading(false);
+    }
   }, [query, incidentFilter, severityFilter, formationFilter]);
+
+  // Trigger search on filter changes or query debounce
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      fetchResults();
+    }, 500); // Debounce typing
+    return () => clearTimeout(handler);
+  }, [fetchResults]);
+
+  const filtered = results;
 
   const paginated = filtered.slice(0, page * PAGE_SIZE);
   const hasMore = paginated.length < filtered.length;
@@ -288,7 +338,9 @@ export default function KnowledgePage() {
           >
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
-              placeholder="Search incidents, mitigations, formations, wells…"
+              type="search"
+              aria-label="Search incidents, mitigations, formations, and wells"
+              placeholder="e.g. mud loss Barail 6800 ft…"
               value={query}
               onChange={e => setQuery(e.target.value)}
               className="pl-10 pr-10 h-11 text-sm bg-card border-border/60 focus:border-primary"
@@ -340,11 +392,7 @@ export default function KnowledgePage() {
                 className="space-y-3"
               >
                 {paginated.map(entry => (
-                  <ResultCard
-                    key={entry.id}
-                    entry={entry}
-                    onClick={() => router.push(`/wells/${entry.wellId}`)}
-                  />
+                  <ResultCard key={entry.id} entry={entry} />
                 ))}
                 {/* Infinite scroll trigger */}
                 {hasMore && (
@@ -379,5 +427,14 @@ export default function KnowledgePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// useSearchParams requires a Suspense boundary in Next.js App Router.
+export default function KnowledgePage() {
+  return (
+    <Suspense fallback={<div className="py-20 text-center text-muted-foreground">Loading…</div>}>
+      <KnowledgeContent />
+    </Suspense>
   );
 }

@@ -1,4 +1,5 @@
-import { query } from '../../src/config/db';
+import { sql } from 'drizzle-orm';
+import { db } from '../../src/db';
 import { WELL_IDS } from './02_wells';
 
 export const FORMATION_IDS: Record<string, string> = {
@@ -89,16 +90,13 @@ export async function seedFormations(): Promise<void> {
   ];
 
   for (const f of formations) {
-    await query(
-      `INSERT IGNORE INTO well_formations
+    await db.execute(sql`
+      INSERT IGNORE INTO well_formations
         (id, well_id, formation_name, top_depth_ft, bottom_depth_ft, lithology,
          pore_pressure_psi, fracture_gradient, reservoir_notes)
-       VALUES (?,?,?,?,?,?,?,?,?)`,
-      [
-        f.id, f.well_id, f.formation_name, f.top_depth_ft, f.bottom_depth_ft,
-        f.lithology, f.pore_pressure_psi, f.fracture_gradient, f.reservoir_notes,
-      ]
-    );
+       VALUES (${f.id}, ${f.well_id}, ${f.formation_name}, ${f.top_depth_ft}, ${f.bottom_depth_ft},
+               ${f.lithology}, ${f.pore_pressure_psi}, ${f.fracture_gradient}, ${f.reservoir_notes})
+    `);
   }
 
   console.log(`  ✔ Seeded ${formations.length} formations`);

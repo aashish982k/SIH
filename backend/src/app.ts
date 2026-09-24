@@ -14,6 +14,8 @@ import searchRoutes  from './routes/searchRoutes';
 import intelligenceRoutes from './routes/intelligenceRoutes';
 import riskRoutes from './routes/riskRoutes';
 import recommendationRoutes from './routes/recommendationRoutes';
+import alertRoutes from './routes/alertRoutes';
+import knowledgeRoutes from './routes/knowledgeRoutes';
 
 const app = express();
 
@@ -42,6 +44,8 @@ app.use('/api/search',  searchRoutes);
 app.use('/api/intelligence', intelligenceRoutes);
 app.use('/api/risks', riskRoutes);
 app.use('/api/recommendations', recommendationRoutes);
+app.use('/api/alerts', alertRoutes);
+app.use('/api/knowledge', knowledgeRoutes);
 
 // ── 404 handler ───────────────────────────────────────────────
 app.use((_req, res) => {
