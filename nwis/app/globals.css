@@ -4,58 +4,66 @@
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
-/* ─── NWIS Design Tokens ────────────────────────────────────────────────────── */
+/* ─── NWIS Design Tokens: Cinematic Dark Subsurface Intelligence ───────────────────────── */
 :root {
-  /* Brand colors (mapped to shadcn CSS variables) */
-  --background:           oklch(0.979 0.003 247);   /* #F8FAFC */
-  --foreground:           oklch(0.130 0.025 264);   /* #0F172A */
-  --card:                 oklch(1 0 0);              /* #FFFFFF */
-  --card-foreground:      oklch(0.130 0.025 264);
-  --popover:              oklch(1 0 0);
-  --popover-foreground:   oklch(0.130 0.025 264);
+  /* Default to Tactical Cinematic Dark Palette */
+  --background:           #070A0E;   /* Deep subsurface obsidian black */
+  --foreground:           #E2E8F0;   /* Crisp white-gray text */
+  --card:                 #0C1017;   /* Tactical dark panel */
+  --card-foreground:      #F1F5F9;
+  --popover:              #0D1219;
+  --popover-foreground:   #F1F5F9;
 
-  /* Primary: OIL deep navy #0F4C81 */
-  --primary:              oklch(0.352 0.112 250);
-  --primary-foreground:   oklch(0.985 0 0);
+  /* Primary: Oil India Amber / Gold Highlight (#F59E0B / #D97706) */
+  --primary:              #F59E0B;
+  --primary-foreground:   #070A0E;
 
-  /* Secondary: teal accent #2E86AB */
-  --secondary:            oklch(0.548 0.099 229);
-  --secondary-foreground: oklch(0.985 0 0);
+  /* Secondary: Deep Tactical Cyan / Petrol Teal (#0D9488 / #06B6D4) */
+  --secondary:            #0E7490;
+  --secondary-foreground: #FFFFFF;
 
-  --muted:                oklch(0.944 0.006 247);   /* #E2E8F0 */
-  --muted-foreground:     oklch(0.491 0.021 256);   /* #64748B */
-  --accent:               oklch(0.920 0.020 250);
-  --accent-foreground:    oklch(0.352 0.112 250);
-  --destructive:          oklch(0.534 0.207 26);    /* #DC2626 high risk */
-  --border:               oklch(0.813 0.018 252);   /* #CBD5E1 */
-  --input:                oklch(0.813 0.018 252);
-  --ring:                 oklch(0.352 0.112 250);
+  --muted:                #141C24;   /* Deep slate panel border / muted fill */
+  --muted-foreground:     #7E8B9B;   /* Subdued technical label color */
+  --accent:               #1A2432;
+  --accent-foreground:    #F59E0B;
+  --destructive:          #EF4444;   /* High risk red */
+  --border:               #1B2533;   /* Fine dark grid borders */
+  --input:                #141C26;
+  --ring:                 #F59E0B;
 
-  /* Border radii per README spec */
-  --radius: 0.875rem;   /* 14px cards */
+  /* Border radii */
+  --radius: 0.625rem;   /* Tactical 10px rounded corners */
 
   /* Risk severity colors */
-  --risk-low:             oklch(0.527 0.163 145);   /* #16A34A */
-  --risk-medium:          oklch(0.627 0.162 55);    /* #D97706 */
-  --risk-high:            oklch(0.534 0.207 26);    /* #DC2626 */
-  --risk-critical:        oklch(0.482 0.228 291);   /* #7C3AED */
+  --risk-low:             #10B981;   /* Emerald Nominal */
+  --risk-medium:          #F59E0B;   /* Amber Watch */
+  --risk-high:            #EF4444;   /* Crimson Critical / High */
+  --risk-critical:        #A855F7;   /* Purple Severe */
 
-  /* Chart palette (drilling domain colors) */
-  --chart-1: oklch(0.548 0.099 229);   /* secondary teal */
-  --chart-2: oklch(0.527 0.163 145);   /* green */
-  --chart-3: oklch(0.627 0.162 55);    /* amber */
-  --chart-4: oklch(0.534 0.207 26);    /* red */
-  --chart-5: oklch(0.482 0.228 291);   /* purple */
+  /* Geological strata colors */
+  --strata-alluvium:      #334139;
+  --strata-tipam:         #7C5E3A;
+  --strata-girujan:       #475569;
+  --strata-barail:        #8C733E;
+  --strata-disang:        #3B4252;
+  --strata-basement:      #1F2430;
 
-  /* Sidebar (matches card) */
-  --sidebar:                    oklch(0.970 0.004 247);
-  --sidebar-foreground:         oklch(0.130 0.025 264);
-  --sidebar-primary:            oklch(0.352 0.112 250);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent:             oklch(0.920 0.020 250);
-  --sidebar-accent-foreground:  oklch(0.352 0.112 250);
-  --sidebar-border:             oklch(0.813 0.018 252);
-  --sidebar-ring:               oklch(0.352 0.112 250);
+  /* Chart palette */
+  --chart-1: #F59E0B;   /* Amber */
+  --chart-2: #10B981;   /* Emerald */
+  --chart-3: #06B6D4;   /* Cyan */
+  --chart-4: #EF4444;   /* Red */
+  --chart-5: #A855F7;   /* Purple */
+
+  /* Sidebar */
+  --sidebar:                    #080C11;
+  --sidebar-foreground:         #E2E8F0;
+  --sidebar-primary:            #F59E0B;
+  --sidebar-primary-foreground: #070A0E;
+  --sidebar-accent:             #121922;
+  --sidebar-accent-foreground:  #F59E0B;
+  --sidebar-border:             #18202B;
+  --sidebar-ring:               #F59E0B;
 }
 
 @theme inline {
@@ -179,12 +187,40 @@
     100% { background-color: transparent; }
   }
 
+  /* Tactical Subsurface Grid Background */
+  .subsurface-grid {
+    background-image: 
+      radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.07) 1px, transparent 0);
+    background-size: 32px 32px;
+  }
+
+  .tactical-border {
+    border: 1px solid #1A2634;
+  }
+
+  .tactical-panel {
+    background-color: #0B1017;
+    border: 1px solid #1A2634;
+  }
+
+  /* Radar scanning pulse */
+  .radar-sweep {
+    background: conic-gradient(from 0deg, transparent 0deg, rgba(245, 158, 11, 0.15) 60deg, transparent 65deg);
+    animation: radar-sweep-spin 4s linear infinite;
+  }
+  @keyframes radar-sweep-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
   /* Mapbox popup override */
   .mapboxgl-popup-content {
     padding: 0 !important;
-    border-radius: 14px !important;
-    box-shadow: 0 4px 24px -4px rgba(15, 76, 129, 0.2) !important;
-    border: 1px solid hsl(213 33% 88%) !important;
+    border-radius: 10px !important;
+    background: #0B1017 !important;
+    color: #F1F5F9 !important;
+    box-shadow: 0 4px 24px -4px rgba(0, 0, 0, 0.8) !important;
+    border: 1px solid #1A2634 !important;
     overflow: hidden;
   }
   .mapboxgl-popup-tip { display: none !important; }
@@ -193,16 +229,16 @@
 
 /* ─── Scrollbar Styling ─────────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: #070A0E;
 }
 ::-webkit-scrollbar-thumb {
-  background: oklch(0.813 0.018 252);
-  border-radius: 3px;
+  background: #1E293B;
+  border-radius: 2px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.634 0.040 252);
+  background: #334155;
 }

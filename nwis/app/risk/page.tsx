@@ -1,434 +1,645 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useRouter } from 'next/navigation';
-import { useAppStore } from '@/store/appStore';
-import { MOCK_THREAT_MATRIX, HISTORICAL_ALERTS } from '@/lib/mock/alerts';
-import { cn, getRiskBgClass, getRiskBorderClass, getRiskLabel, getIncidentLabel, formatDepth, timeAgo } from '@/lib/utils';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Separator } from '@/components/ui/separator';
-import {
-  AlertTriangle, Activity, Map, ChevronDown, ChevronRight,
-  Clock, Zap, CheckCircle, Eye
+import { motion } from 'framer-motion';
+import { 
+  Play, 
+  Pause, 
+  RotateCcw, 
+  AlertTriangle, 
+  Check, 
+  ChevronRight, 
+  Compass, 
+  Sliders, 
+  TrendingUp, 
+  Layers, 
+  Info,
+  ShieldAlert,
+  ArrowRight,
+  ExternalLink,
+  X
 } from 'lucide-react';
-import type { Alert, RiskLevel } from '@/lib/types';
+import { TacticalSidebar } from '@/components/layout/Sidebar';
+import { useState, useEffect } from 'react';
+import { cn } from '@/lib/utils';
 
-// ─── Animated SVG Arc Gauge ───────────────────────────────────────────────────
-function RiskGauge({ score, level }: { score: number; level: RiskLevel }) {
-  const r = 72;
-  const cx = 90;
-  const cy = 90;
-  const startAngle = -210;
-  const endAngle = 30;
-  const totalAngle = endAngle - startAngle;
-  const circumference = (2 * Math.PI * r * totalAngle) / 360;
-  const filled = (score / 100) * circumference;
-  const dashArray = `${circumference}`;
-  const [animatedFill, setAnimatedFill] = useState(0);
+// Geological formations matching Assam Shelf / Reference Image 4
+const FORMATIONS = [
+  { name: 'Recent Alluvium', top: 0, base: 600, color: '#3A483E', desc: 'Loose gravel and sandy clay' },
+  { name: 'Dhekiajuli Formation', top: 600, base: 1400, color: '#4A5B52', desc: 'Coarse sandstones with clay bands' },
+  { name: 'Tipam Sandstone', top: 1400, base: 2442, color: '#856A41', desc: 'Porous reservoir sand, high fluid mobility' },
+  { name: 'Girujan Clay', top: 2442, base: 2850, color: '#4D5866', desc: 'Overpressured reactive shale zone' },
+  { name: 'Disang Shale', top: 2850, base: 3400, color: '#353D4A', desc: 'Hard compact shale, wellbore collapse risk' },
+  { name: 'Basement', top: 3400, base: 4000, color: '#222834', desc: 'Granitic metamorphic basement' }
+];
 
-  const color =
-    level === 'low' ? 'var(--risk-low)' :
-    level === 'medium' ? 'var(--risk-medium)' :
-    level === 'critical' ? 'var(--risk-critical)' :
-    'var(--risk-high)';
+interface LiveSignalAlert {
+  id: string;
+  severity: 'critical' | 'watch' | 'normal';
+  title: string;
+  offsetWell: string;
+  depth: string;
+  confidence: string;
+  timeAgo: string;
+  reason: string;
+  mitigation: string;
+  fieldSteps: string[];
+  youtubeId: string;
+  youtubeTitle: string;
+  incidentPhotos: { url: string; caption: string }[];
+  acknowledged: boolean;
+}
 
+const INITIAL_ALERTS: LiveSignalAlert[] = [
+  {
+    id: 'sig-01',
+    severity: 'critical',
+    title: 'Lost circulation pattern detected',
+    offsetWell: 'AA-12Y',
+    depth: '2,430 m',
+    confidence: '92% confidence',
+    timeAgo: 'NOW',
+    reason: 'Formation match + depth proximity',
+    mitigation: 'Pre-treat active system with 20 ppb coarse fiber LCM pill. Reduce pump flow to 420 gpm to keep ECD below fracture gradient.',
+    fieldSteps: [
+      'Spot 30 bbl high-viscosity pill with mica & calcium carbonate',
+      'Reduce pump rate from 650 to 420 gpm before boundary',
+      'Monitor pit volume on 1-minute interval'
+    ],
+    youtubeId: 'W3q8Od5qJio',
+    youtubeTitle: 'Managing Lost Circulation in Upper Assam Reservoir Sands',
+    incidentPhotos: [
+      { url: 'https://images.unsplash.com/photo-1612831819601-cb7a8430de1e?w=320&q=80', caption: 'Pit volume monitor — sudden total loss event' },
+      { url: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=320&q=80', caption: 'LCM pill being mixed on rig floor, AA-12Y' },
+    ],
+    acknowledged: false
+  },
+  {
+    id: 'sig-02',
+    severity: 'watch',
+    title: 'Torque increase above offset median',
+    offsetWell: 'AA-092',
+    depth: '1,954 m',
+    confidence: '78% confidence',
+    timeAgo: '-14 MIN',
+    reason: 'Spatial distance + recency',
+    mitigation: 'Add 3% liquid lubricant to active mud system to reduce frictional drag. Maintain string rotation during connections.',
+    fieldSteps: [
+      'Add 3% bio-lubricant to suction pit',
+      'Control rotary table at 60 RPM to mitigate stick-slip',
+      'Perform reaming passes if torque exceeds 14,000 ft-lbs'
+    ],
+    youtubeId: '9Gk5fL2Esq4',
+    youtubeTitle: 'Torque & Drag Optimization in Directional Drilling',
+    incidentPhotos: [
+      { url: 'https://images.unsplash.com/photo-1504328345606-18bbc8c9d7d1?w=320&q=80', caption: 'Weight indicator — torque oscillation event at AA-092' },
+      { url: 'https://images.unsplash.com/photo-1565373679580-fc0cb2b6f418?w=320&q=80', caption: 'Shale cuttings indicating reactive formation contact' },
+    ],
+    acknowledged: false
+  },
+  {
+    id: 'sig-03',
+    severity: 'normal',
+    title: 'Predicted formation boundary',
+    offsetWell: 'AA-037',
+    depth: '1,910 m',
+    confidence: '88% confidence',
+    timeAgo: '-1.2 HR',
+    reason: 'Formation sequence match',
+    mitigation: 'Prepare mud weight increase of 0.2 SG prior to penetrating overpressured Girujan Clay transition.',
+    fieldSteps: [
+      'Condition mud weight to 1.18 SG',
+      'Verify shale shaker screen sizes (API 140/170)',
+      'Circulate bottoms up before drilling deeper'
+    ],
+    youtubeId: 'W3q8Od5qJio',
+    youtubeTitle: 'Formation Pressure Prediction & Casing Seat Selection',
+    incidentPhotos: [
+      { url: 'https://images.unsplash.com/photo-1612831819601-cb7a8430de1e?w=320&q=80', caption: 'Mud weight adjustment board — AA-037 field record' },
+    ],
+    acknowledged: false
+  }
+];
+
+export default function LiveSimulationPage() {
+  const [currentDepth, setCurrentDepth] = useState<number>(2414);
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [speed, setSpeed] = useState<number>(1);
+  const [alerts, setAlerts] = useState<LiveSignalAlert[]>(INITIAL_ALERTS);
+  const [selectedAlertForMitigation, setSelectedAlertForMitigation] = useState<LiveSignalAlert | null>(null);
+
+  const handleAcknowledge = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setAlerts(prev => prev.map(a => a.id === id ? { ...a, acknowledged: true } : a));
+    // Also update the modal state so the button reflects ACK immediately
+    setSelectedAlertForMitigation(prev => prev && prev.id === id ? { ...prev, acknowledged: true } : prev);
+  };
+
+  // Active Formation based on depth
+  const currentFormation = FORMATIONS.find(f => currentDepth >= f.top && currentDepth < f.base) || FORMATIONS[2];
+  const nextBoundaryDistance = currentFormation.base - currentDepth;
+
+  // Live simulation play loop
   useEffect(() => {
-    const timer = setTimeout(() => setAnimatedFill(filled), 200);
-    return () => clearTimeout(timer);
-  }, [filled]);
-
-  // Convert polar to cartesian
-  function polarToXY(angleDeg: number) {
-    const rad = ((angleDeg - 90) * Math.PI) / 180;
-    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
-  }
-
-  // Arc path (start → end)
-  function arcPath(fromDeg: number, toDeg: number) {
-    const start = polarToXY(fromDeg);
-    const end = polarToXY(toDeg);
-    const large = toDeg - fromDeg > 180 ? 1 : 0;
-    return `M ${start.x} ${start.y} A ${r} ${r} 0 ${large} 1 ${end.x} ${end.y}`;
-  }
-
-  const bgPath = arcPath(startAngle, endAngle);
-  const fillPath = arcPath(startAngle, startAngle + (score / 100) * totalAngle);
+    let interval: any = null;
+    if (isPlaying) {
+      interval = setInterval(() => {
+        setCurrentDepth(prev => {
+          if (prev >= 3200) return 1800; // loop simulation
+          return prev + 1 * speed;
+        });
+      }, 100);
+    }
+    return () => clearInterval(interval);
+  }, [isPlaying, speed]);
 
   return (
-    <div className="flex flex-col items-center">
-      <svg width={180} height={130} viewBox="0 0 180 130">
-        {/* Background arc */}
-        <path d={bgPath} fill="none" stroke="var(--muted)" strokeWidth={12} strokeLinecap="round" />
-        {/* Filled arc */}
-        <motion.path
-          d={fillPath}
-          fill="none"
-          stroke={color}
-          strokeWidth={12}
-          strokeLinecap="round"
-          initial={{ pathLength: 0 }}
-          animate={{ pathLength: 1 }}
-          transition={{ duration: 1.2, ease: 'easeOut', delay: 0.3 }}
-        />
-        {/* Score text */}
-        <text x={cx} y={cy + 4} textAnchor="middle" fontSize={32} fontWeight="700"
-          fontFamily="JetBrains Mono, monospace" fill="var(--foreground)"
-        >
-          {score}
-        </text>
-        <text x={cx} y={cy + 22} textAnchor="middle" fontSize={11}
-          fontFamily="Inter, sans-serif" fill="var(--muted-foreground)"
-        >
-          Risk Score
-        </text>
-        {/* Range labels */}
-        <text x={27} y={105} fontSize={9} fill="var(--muted-foreground)" fontFamily="Inter, sans-serif">0</text>
-        <text x={148} y={105} fontSize={9} fill="var(--muted-foreground)" fontFamily="Inter, sans-serif">100</text>
-      </svg>
-      <span
-        className="text-sm font-bold uppercase tracking-widest px-3 py-1 rounded-full -mt-4"
-        style={{ color, backgroundColor: `color-mix(in oklch, ${color} 12%, transparent)` }}
-      >
-        {getRiskLabel(level)} Risk
-      </span>
-    </div>
-  );
-}
+    <div className="flex min-h-[calc(100vh-49px)] w-full bg-[#070A0E] text-white">
+      {/* Tactical Left Sidebar */}
+      <TacticalSidebar />
 
-// ─── Depth Tape ───────────────────────────────────────────────────────────────
-function DepthTape({ depth }: { depth: number }) {
-  const ticks = Array.from({ length: 7 }, (_, i) => depth - 300 + i * 100);
-  return (
-    <div className="flex flex-col items-center">
-      <div className="relative w-14 h-36 rounded-lg overflow-hidden bg-muted/50 border border-border/60">
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-0">
-          {ticks.map((tick, i) => (
-            <div key={tick} className={cn(
-              'w-full flex items-center',
-              i === 3 ? 'bg-primary/15 border-y border-primary/30' : ''
-            )}>
-              <div className={cn('w-3 h-px', tick % 200 === 0 ? 'bg-foreground/30' : 'bg-muted-foreground/30')} />
-              {tick % 200 === 0 && (
-                <span className="text-[8px] font-mono text-muted-foreground ml-1 leading-4">
-                  {(tick / 1000).toFixed(1)}k
-                </span>
-              )}
+      {/* Main Live Drill Simulation Workspace */}
+      <div className="flex-1 p-6 md:p-8 overflow-y-auto max-w-[1500px]">
+        {/* Top Well Header matching Reference Image 4 */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-[#141F2D] mb-6">
+          <div>
+            <div className="text-[10px] font-mono tracking-widest text-[#7E8B9B] uppercase mb-1">
+              LIVE SIMULATION · AA-17H / LAKWA CENTRAL
             </div>
-          ))}
-        </div>
-        {/* Center needle */}
-        <div className="absolute left-0 right-0 top-1/2 h-px bg-primary" />
-        <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 bg-primary rounded-full" />
-      </div>
-      <p className="font-mono text-base font-bold text-foreground mt-2">{formatDepth(depth)}<span className="text-xs text-muted-foreground font-normal ml-1">ft</span></p>
-      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">MD</p>
-    </div>
-  );
-}
-
-// ─── Alert Card ───────────────────────────────────────────────────────────────
-function AlertCard({ alert, isNew }: { alert: Alert; isNew: boolean }) {
-  const router = useRouter();
-  const { acknowledgeAlert } = useAppStore();
-
-  return (
-    <motion.div
-      layout
-      initial={isNew ? { opacity: 0, y: -16, scale: 0.97 } : false}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.35, ease: 'easeOut' }}
-      className={cn(
-        'rounded-xl border-l-4 p-4 bg-card border border-border/60',
-        getRiskBorderClass(alert.riskLevel),
-        isNew && 'alert-flash'
-      )}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap mb-1.5">
-            <Badge className={cn('text-[10px] h-4 px-1.5', getRiskBgClass(alert.riskLevel))}>
-              {getRiskLabel(alert.riskLevel)}
-            </Badge>
-            <span className="text-xs text-muted-foreground">{getIncidentLabel(alert.incidentType)}</span>
-            <span className="text-xs text-muted-foreground">·</span>
-            <span className="text-xs font-mono text-muted-foreground">{formatDepth(alert.depthFt)} ft</span>
-            {isNew && (
-              <span className="text-[10px] font-bold text-primary uppercase tracking-wider">New</span>
-            )}
+            <h1 className="text-2xl sm:text-3xl font-semibold text-white tracking-tight flex items-baseline gap-3">
+              Well AA-17H
+              <span className="text-xs font-mono font-normal text-[#10B981] bg-[#10B981]/10 px-2 py-0.5 rounded border border-[#10B981]/30">
+                Simulation Live
+              </span>
+            </h1>
+            <p className="text-xs text-[#8A9BAE] mt-0.5 font-mono">
+              Real-time offset intelligence at <span className="text-[#F59E0B] font-bold">{currentDepth.toLocaleString()} m</span> measured depth.
+            </p>
           </div>
-          <p className="text-sm font-medium text-foreground leading-snug">{alert.message}</p>
-          <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
-            <Clock className="w-3 h-3" />
-            {timeAgo(alert.timestamp)}
-          </p>
+
+          {/* Simulation Depth Control Toolbar */}
+          <div className="flex items-center gap-3">
+            {/* Play/Pause & Speed */}
+            <div className="flex items-center gap-1 bg-[#0A0F16] p-1 rounded-lg border border-[#1A2634]">
+              <button
+                onClick={() => setIsPlaying(!isPlaying)}
+                className="p-1.5 rounded hover:bg-[#1E293B] text-white transition-colors"
+                title={isPlaying ? "Pause" : "Play Drill Feed"}
+              >
+                {isPlaying ? <Pause className="w-4 h-4 text-[#F59E0B]" /> : <Play className="w-4 h-4 text-[#10B981]" />}
+              </button>
+              <button
+                onClick={() => setSpeed(s => (s === 1 ? 2 : s === 2 ? 4 : 1))}
+                className="px-2 py-1 rounded text-[11px] font-mono font-bold text-[#94A3B8] hover:text-white"
+              >
+                {speed}x speed
+              </button>
+              <button
+                onClick={() => setCurrentDepth(2414)}
+                className="p-1.5 rounded hover:bg-[#1E293B] text-[#64748B] hover:text-white"
+                title="Reset to 2,414m"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Depth Scrubber Input */}
+            <div className="flex items-center gap-2 bg-[#0A0F16] px-3 py-1.5 rounded-lg border border-[#1A2634]">
+              <span className="text-[10px] font-mono text-[#64748B] uppercase">Depth</span>
+              <input
+                type="range"
+                min={1000}
+                max={3500}
+                value={currentDepth}
+                onChange={(e) => setCurrentDepth(Number(e.target.value))}
+                className="w-32 accent-[#F59E0B] cursor-pointer"
+              />
+              <span className="text-xs font-mono font-bold text-white min-w-[55px] text-right">
+                {currentDepth} m
+              </span>
+            </div>
+          </div>
         </div>
-        {alert.status === 'new' && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="shrink-0 text-xs h-7"
-            onClick={() => acknowledgeAlert(alert.id)}
-          >
-            <CheckCircle className="w-3.5 h-3.5 mr-1" />Ack
-          </Button>
-        )}
-      </div>
 
-      {/* Recommended Action */}
-      <Accordion className="mt-2">
-        <AccordionItem value="action" className="border-none">
-          <AccordionTrigger className="py-1 text-xs text-primary hover:no-underline font-medium">
-            <Zap className="w-3 h-3 mr-1" />Recommended Action
-          </AccordionTrigger>
-          <AccordionContent className="pt-1 pb-0">
-            <p className="text-xs text-muted-foreground leading-relaxed">{alert.recommendedAction}</p>
-          </AccordionContent>
-        </AccordionItem>
-      </Accordion>
+        {/* 3-Column Tactical Display matching Reference Image 4 */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* Column 1: Subsurface Stratigraphic Window (3 cols) */}
+          <div className="lg:col-span-3 bg-[#0A0F16] border border-[#172332] rounded-xl p-4">
+            <div className="flex items-center justify-between mb-3 text-[10px] font-mono text-[#7E8B9B]">
+              <span className="uppercase tracking-wider">FORMATION COLUMN</span>
+              <span className="text-[#38BDF8]">SUBSURFACE WINDOW</span>
+            </div>
 
-      <div className="flex gap-2 mt-2">
-        {alert.relatedWellIds.length > 0 && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 text-xs gap-1"
-            onClick={() => router.push('/map')}
-          >
-            <Map className="w-3 h-3" />View on Map
-          </Button>
-        )}
-        {alert.relatedWellIds.slice(0, 2).map(wid => (
-          <Button
-            key={wid}
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs gap-1"
-            onClick={() => router.push(`/wells/${wid}`)}
-          >
-            <Eye className="w-3 h-3" />{wid.replace('well-', 'W-')}
-          </Button>
-        ))}
-      </div>
-    </motion.div>
-  );
-}
+            {/* Geological Vertical Strata Stack */}
+            <div className="relative w-full h-[460px] rounded-lg border border-[#172334] overflow-hidden flex flex-col">
+              {FORMATIONS.map((f) => {
+                const heightPercent = ((f.base - f.top) / 4000) * 100;
+                const isCurrent = currentFormation.name === f.name;
 
-// ─── Risk & Alerts Page ───────────────────────────────────────────────────────
-export default function RiskPage() {
-  const { liveDepthFt, liveRiskScore, liveRiskLevel, alerts, liveRtmacData, acknowledgeAlert } = useAppStore();
-  const newAlerts = alerts.filter(a => a.status === 'new');
-  const acknowledgedAlerts = alerts.filter(a => a.status === 'acknowledged');
+                return (
+                  <div
+                    key={f.name}
+                    style={{ height: `${heightPercent}%`, backgroundColor: f.color }}
+                    className={cn(
+                      "w-full relative px-2.5 py-1.5 border-b border-black/40 flex flex-col justify-between transition-all",
+                      isCurrent ? "ring-2 ring-inset ring-[#F59E0B]" : "opacity-90"
+                    )}
+                  >
+                    <div className="flex items-center justify-between font-mono text-[10px]">
+                      <span className="text-white font-medium drop-shadow-sm">{f.name}</span>
+                      <span className="text-white/70 text-[9px]">{f.top} m</span>
+                    </div>
 
-  return (
-    <div className="mx-auto max-w-[1400px] px-4 md:px-6 py-8">
-      {/* Page Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -12 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mb-6"
-      >
-        <div className="flex items-center gap-2">
-          <AlertTriangle className="w-5 h-5 text-destructive" />
-          <h1 className="text-2xl font-bold text-foreground">Risk & Alerts</h1>
-        </div>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Live risk assessment and alert monitoring for the active well
-        </p>
-      </motion.div>
+                    {isCurrent && (
+                      <div className="text-[9px] text-[#F59E0B] font-mono font-bold drop-shadow">
+                        ACTIVE INTERVAL
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
 
-      {/* ── Top Band: Depth Tape + Gauge + Stats ────────────────────── */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6"
-      >
-        {/* Depth Tape */}
-        <Card className="border-border/60">
-          <CardContent className="p-5 flex flex-col items-center">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-3 self-start">
-              Live Depth
-            </p>
-            <DepthTape depth={liveDepthFt} />
-          </CardContent>
-        </Card>
+              {/* Live Drill Bit Depth Marker Line */}
+              <div
+                style={{ top: `${(currentDepth / 4000) * 100}%` }}
+                className="absolute left-0 right-0 z-20 flex items-center -translate-y-1/2 pointer-events-none transition-all duration-150"
+              >
+                <div className="w-full h-[2px] bg-[#EF4444] shadow-md shadow-[#EF4444]" />
+                <div className="absolute right-1 px-1.5 py-0.5 rounded bg-[#EF4444] text-white text-[9px] font-mono font-bold whitespace-nowrap">
+                  {currentDepth} m
+                </div>
+              </div>
+            </div>
 
-        {/* Risk Gauge */}
-        <Card className={cn(
-          'border-2 transition-colors',
-          liveRiskLevel === 'high' || liveRiskLevel === 'critical'
-            ? 'border-risk-high bg-risk-high'
-            : liveRiskLevel === 'medium'
-            ? 'border-risk-medium bg-risk-medium'
-            : 'border-border/60'
-        )}>
-          <CardContent className="p-5 flex flex-col items-center">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1 self-start">
-              AI Risk Index
-            </p>
-            <RiskGauge score={liveRiskScore} level={liveRiskLevel} />
-          </CardContent>
-        </Card>
+            {/* Formation boundary status badge */}
+            <div className="mt-3 p-2.5 rounded-lg bg-[#070D13] border border-[#141F2D] text-xs font-mono">
+              <div className="text-[#64748B] text-[10px] uppercase">Next formation boundary</div>
+              <div className="text-white font-bold flex items-center justify-between mt-0.5">
+                <span>{currentFormation.name} Base</span>
+                <span className="text-[#F59E0B]">-{nextBoundaryDistance} m</span>
+              </div>
+            </div>
+          </div>
 
-        {/* Drilling params */}
-        <Card className="border-border/60">
-          <CardContent className="p-5">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-              Drilling Parameters
-            </p>
-            {liveRtmacData ? (
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { label: 'ROP', value: `${liveRtmacData.rateOfPenetrationFtHr.toFixed(1)}`, unit: 'ft/hr' },
-                  { label: 'WOB', value: `${liveRtmacData.weightOnBitKlbs.toFixed(1)}`, unit: 'klbs' },
-                  { label: 'RPM', value: `${liveRtmacData.rotarySpeedRpm}`, unit: '' },
-                  { label: 'Mud Wt', value: `${liveRtmacData.mudWeightPpg.toFixed(2)}`, unit: 'ppg' },
-                  { label: 'SPP', value: `${liveRtmacData.standpipePressurePsi}`, unit: 'psi' },
-                  { label: 'Updated', value: timeAgo(liveRtmacData.timestamp), unit: '' },
-                ].map(({ label, value, unit }) => (
-                  <div key={label}>
-                    <p className="text-[10px] text-muted-foreground uppercase">{label}</p>
-                    <p className="font-mono text-sm font-bold text-foreground">
-                      {value}<span className="text-xs font-normal text-muted-foreground ml-1">{unit}</span>
-                    </p>
+          {/* Column 2: Offset Intelligence Radar Map (5 cols) */}
+          <div className="lg:col-span-5 bg-[#0A0F16] border border-[#172332] rounded-xl p-4">
+            <div className="flex items-center justify-between mb-3 text-[10px] font-mono text-[#7E8B9B]">
+              <span className="uppercase tracking-wider">OFFSET INTELLIGENCE / 7 KM RANGE</span>
+              <div className="flex items-center gap-1">
+                <button className="px-2 py-0.5 rounded bg-[#162232] text-white text-[9px] font-mono">All</button>
+                <button className="px-2 py-0.5 rounded text-[#64748B] hover:text-white text-[9px] font-mono">Selected</button>
+              </div>
+            </div>
+
+            {/* Radar View Container */}
+            <div className="relative aspect-square w-full rounded-lg bg-[#070D13] border border-[#141E2C] flex items-center justify-center overflow-hidden">
+              {/* Distance Rings */}
+              <div className="absolute w-[80%] h-[80%] rounded-full border border-[#162334]" />
+              <div className="absolute w-[55%] h-[55%] rounded-full border border-[#162334]" />
+              <div className="absolute w-[30%] h-[30%] rounded-full border border-[#1F3148]" />
+
+              {/* Crosshair Lines */}
+              <div className="absolute w-full h-[1px] bg-[#141E2C]" />
+              <div className="absolute h-full w-[1px] bg-[#141E2C]" />
+
+              {/* Radar Sweep Animation */}
+              <div className="absolute w-full h-full radar-sweep pointer-events-none" />
+
+              {/* Center Active Well AA-17H */}
+              <div className="absolute top-[50%] left-[50%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10">
+                <span className="w-3.5 h-3.5 rounded-full bg-[#EF4444] animate-ping absolute" />
+                <span className="w-3.5 h-3.5 rounded-full bg-[#EF4444] border-2 border-white relative shadow-lg shadow-[#EF4444]" />
+                <span className="font-mono text-[9px] text-white font-bold mt-1 bg-black/80 px-1 rounded border border-[#EF4444]/40">
+                  AA-17H (Active)
+                </span>
+              </div>
+
+              {/* Offset Wells with distance markers */}
+              {/* AA-12Y (Critical Offset) */}
+              <div className="absolute top-[28%] left-[72%] flex flex-col items-center">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#EF4444] border border-white" />
+                <span className="font-mono text-[8px] text-[#EF4444] font-bold mt-0.5 bg-black/70 px-1 rounded">
+                  AA-12Y (1.2 km)
+                </span>
+              </div>
+
+              {/* AA-092 (Watch Offset) */}
+              <div className="absolute top-[35%] left-[24%] flex flex-col items-center">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#F59E0B] border border-white" />
+                <span className="font-mono text-[8px] text-[#F59E0B] mt-0.5 bg-black/70 px-1 rounded">
+                  AA-092 (2.4 km)
+                </span>
+              </div>
+
+              {/* AA-037 */}
+              <div className="absolute top-[72%] left-[32%] flex flex-col items-center">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#10B981] border border-white" />
+                <span className="font-mono text-[8px] text-[#10B981] mt-0.5 bg-black/70 px-1 rounded">
+                  AA-037 (3.8 km)
+                </span>
+              </div>
+
+              {/* AA-701 */}
+              <div className="absolute top-[68%] left-[78%] flex flex-col items-center">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#10B981] border border-white" />
+                <span className="font-mono text-[8px] text-[#10B981] mt-0.5 bg-black/70 px-1 rounded">
+                  AA-701 (5.2 km)
+                </span>
+              </div>
+
+              {/* Radar Scale Legend */}
+              <div className="absolute bottom-2 right-2 font-mono text-[9px] text-[#64748B]">
+                Range: 7 km radius
+              </div>
+            </div>
+
+            {/* Offset Well Summary Bar */}
+            <div className="mt-3 flex items-center justify-between text-[10px] font-mono text-[#7E8B9B]">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-[#EF4444]" /> AA-17H Active
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-[#F59E0B]" /> 2 Relevant Offsets
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-[#10B981]" /> 5 Other Offsets
+              </span>
+            </div>
+          </div>
+
+          {/* Column 3: Live Offset Alerts & Lessons Learned (4 cols) */}
+          <div className="lg:col-span-4 space-y-4">
+            <div className="bg-[#0A0F16] border border-[#172332] rounded-xl p-4">
+              <div className="flex items-center justify-between mb-3 text-[10px] font-mono text-[#7E8B9B]">
+                <span className="uppercase tracking-wider">LIVE SIGNALS · ALERT FEED (3)</span>
+                <span className="text-[#F59E0B] font-bold">NEARBY →</span>
+              </div>
+
+              {/* Dynamic Alerts Stack */}
+              <div className="space-y-3">
+                {alerts.map((alert) => (
+                  <div 
+                    key={alert.id}
+                    onClick={() => setSelectedAlertForMitigation(alert)}
+                    className={cn(
+                      "p-3 rounded-lg border relative transition-all cursor-pointer group",
+                      alert.acknowledged 
+                        ? "bg-[#0A0E14] border-[#162230] opacity-60" 
+                        : alert.severity === 'critical'
+                        ? "bg-[#140D10] border-[#EF4444]/40 hover:border-[#EF4444]"
+                        : alert.severity === 'watch'
+                        ? "bg-[#14120D] border-[#F59E0B]/40 hover:border-[#F59E0B]"
+                        : "bg-[#0C141E] border-[#0284C7]/40 hover:border-[#38BDF8]"
+                    )}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className={cn(
+                        "text-[9px] font-mono uppercase font-bold flex items-center gap-1",
+                        alert.severity === 'critical' ? "text-[#EF4444]" : alert.severity === 'watch' ? "text-[#F59E0B]" : "text-[#38BDF8]"
+                      )}>
+                        {!alert.acknowledged && alert.severity === 'critical' && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#EF4444] animate-ping" />
+                        )}
+                        {alert.severity === 'critical' ? 'CRITICAL RISK' : alert.severity === 'watch' ? 'WATCH RISK' : 'NORMAL BOUNDARY'}
+                        {alert.acknowledged && (
+                          <span className="text-[9px] bg-[#10B981]/20 text-[#10B981] px-1 rounded ml-1 font-mono">
+                            ACKNOWLEDGED
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-[9px] font-mono text-[#64748B]">{alert.timeAgo}</span>
+                    </div>
+
+                    <div className="text-xs font-semibold text-white mb-1 group-hover:text-[#F59E0B] transition-colors">
+                      {alert.title}
+                    </div>
+                    <div className="text-[11px] text-[#94A3B8] font-mono mb-2">
+                      {alert.offsetWell} · {alert.depth} · <span className={cn(
+                        "font-bold",
+                        alert.severity === 'critical' ? "text-[#EF4444]" : alert.severity === 'watch' ? "text-[#F59E0B]" : "text-[#38BDF8]"
+                      )}>{alert.confidence}</span>
+                    </div>
+
+                    <div className="pt-2 border-t border-[#1C2634] flex items-center justify-between">
+                      <span className="text-[9px] font-mono text-[#8E9CAE] flex items-center gap-1">
+                        <span>{alert.reason}</span>
+                        <span className="text-[#F59E0B] opacity-0 group-hover:opacity-100 transition-opacity">· View Video Guide →</span>
+                      </span>
+
+                      <button 
+                        onClick={(e) => handleAcknowledge(alert.id, e)}
+                        className={cn(
+                          "px-2.5 py-1 rounded text-[10px] font-mono font-bold flex items-center gap-1 transition-all",
+                          alert.acknowledged
+                            ? "bg-[#10B981]/20 text-[#10B981] border border-[#10B981]/40"
+                            : alert.severity === 'critical'
+                            ? "bg-[#EF4444]/20 hover:bg-[#EF4444]/40 text-[#EF4444]"
+                            : alert.severity === 'watch'
+                            ? "bg-[#F59E0B]/20 hover:bg-[#F59E0B]/40 text-[#F59E0B]"
+                            : "bg-[#0284C7]/20 hover:bg-[#0284C7]/40 text-[#38BDF8]"
+                        )}
+                      >
+                        <Check className="w-3 h-3" />
+                        <span>{alert.acknowledged ? 'ACKED' : 'ACK'}</span>
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">Connecting to eRTMAC…</p>
-            )}
-          </CardContent>
-        </Card>
-      </motion.div>
-
-      {/* ── Main Content: Threat Matrix + Alerts ─────────────────────── */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-
-        {/* Threat Matrix */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-        >
-          <Card className="border-border/60">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Activity className="w-4 h-4 text-primary" />
-                Threat Matrix
-              </CardTitle>
-            </CardHeader>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-border bg-muted/30">
-                    {['Risk Factor', 'Prob.', 'Severity', 'Confidence', 'Wells'].map(h => (
-                      <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground py-2 px-3 first:pl-5 last:pr-5">
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/40">
-                  {MOCK_THREAT_MATRIX.map((row, i) => (
-                    <motion.tr
-                      key={row.riskFactor}
-                      initial={{ opacity: 0, x: -8 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.3 + i * 0.06 }}
-                      className="hover:bg-muted/20 transition-colors"
-                    >
-                      <td className="py-3 pl-5 pr-3">
-                        <p className="font-medium text-foreground text-[11px]">{row.riskFactor}</p>
-                        <p className="text-muted-foreground text-[10px] line-clamp-1 mt-0.5">{row.description}</p>
-                      </td>
-                      <td className="py-3 px-3">
-                        <span className={cn('text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded', getRiskBgClass(row.probability))}>
-                          {getRiskLabel(row.probability)}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3">
-                        <span className={cn('text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded', getRiskBgClass(row.severity))}>
-                          {getRiskLabel(row.severity)}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3">
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-12 h-1.5 rounded-full bg-muted overflow-hidden">
-                            <div
-                              className="h-full rounded-full bg-primary"
-                              style={{ width: `${row.confidence}%` }}
-                            />
-                          </div>
-                          <span className="font-mono text-[10px] text-muted-foreground">{row.confidence}%</span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-3 pr-5 font-mono text-muted-foreground">{row.relatedWellCount}</td>
-                    </motion.tr>
-                  ))}
-                </tbody>
-              </table>
             </div>
-          </Card>
-        </motion.div>
 
-        {/* Active Alerts */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.25 }}
-        >
-          <Card className="border-border/60 h-full">
-            <CardHeader className="pb-3 flex flex-row items-center justify-between">
-              <CardTitle className="text-base flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-destructive" />
-                Active Alerts
-                {newAlerts.length > 0 && (
-                  <Badge variant="destructive" className="text-[10px] h-4 px-1.5">{newAlerts.length} new</Badge>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 overflow-y-auto max-h-[460px] pr-1">
-              <AnimatePresence>
-                {[...newAlerts, ...acknowledgedAlerts].map(alert => (
-                  <AlertCard key={alert.id} alert={alert} isNew={alert.status === 'new'} />
-                ))}
-              </AnimatePresence>
-              {newAlerts.length === 0 && acknowledgedAlerts.length === 0 && (
-                <div className="py-12 text-center">
-                  <CheckCircle className="w-10 h-10 text-[var(--risk-low)] mx-auto mb-2" />
-                  <p className="font-semibold text-foreground">All clear</p>
-                  <p className="text-sm text-muted-foreground mt-1">No active alerts for the current well</p>
+            {/* Live Signal Mitigation & YouTube Video Modal Popup */}
+            {selectedAlertForMitigation && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+                <div className="bg-[#0B1119] border border-[#23354C] rounded-2xl max-w-2xl w-full p-6 text-white shadow-2xl relative overflow-hidden">
+                  {/* Modal Header */}
+                  <div className="flex items-start justify-between gap-4 mb-4 pb-4 border-b border-[#1A283A]">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border",
+                        selectedAlertForMitigation.severity === 'critical' 
+                          ? "bg-[#EF4444]/15 border-[#EF4444]/40 text-[#EF4444]" 
+                          : "bg-[#F59E0B]/15 border-[#F59E0B]/40 text-[#F59E0B]"
+                      )}>
+                        <AlertTriangle className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className={cn(
+                            "text-[10px] font-mono uppercase font-bold px-2 py-0.5 rounded",
+                            selectedAlertForMitigation.severity === 'critical' 
+                              ? "bg-[#EF4444]/20 text-[#EF4444]" 
+                              : "bg-[#F59E0B]/20 text-[#F59E0B]"
+                          )}>
+                            {selectedAlertForMitigation.severity === 'critical' ? 'CRITICAL SIGNAL MITIGATION' : 'OPERATIONAL WATCH PROTOCOL'}
+                          </span>
+                          <span className="text-[11px] font-mono text-[#64748B]">
+                            {selectedAlertForMitigation.depth} · {selectedAlertForMitigation.offsetWell}
+                          </span>
+                        </div>
+                        <h3 className="text-lg font-bold text-white mt-1">
+                          {selectedAlertForMitigation.title}
+                        </h3>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => setSelectedAlertForMitigation(null)}
+                      className="p-1.5 rounded-lg bg-[#141F2D] hover:bg-[#1E2E42] text-[#94A3B8] hover:text-white transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  {/* Proven Mitigation Protocol */}
+                  <div className="mb-4 p-4 rounded-xl bg-[#091512] border border-[#10B981]/30">
+                    <div className="text-[10px] font-mono uppercase tracking-wider text-[#10B981] font-bold mb-1.5 flex items-center gap-1.5">
+                      <ShieldAlert className="w-3.5 h-3.5" />
+                      PROVEN MITIGATION RECOMMENDATION
+                    </div>
+                    <p className="text-xs text-white font-medium leading-relaxed mb-3">
+                      {selectedAlertForMitigation.mitigation}
+                    </p>
+
+                    <div className="space-y-1.5 pt-2 border-t border-[#132A24]">
+                      <div className="text-[10px] font-mono text-[#64748B] uppercase">Field Operating Steps:</div>
+                      {selectedAlertForMitigation.fieldSteps.map((step, idx) => (
+                        <div key={idx} className="text-[11px] font-mono text-[#34D399] flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]" />
+                          <span>{step}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Incident Field Photos */}
+                  {selectedAlertForMitigation.incidentPhotos && selectedAlertForMitigation.incidentPhotos.length > 0 && (
+                    <div className="mb-4">
+                      <div className="text-[10px] font-mono uppercase text-[#64748B] font-bold mb-2 flex items-center gap-1.5">
+                        <Info className="w-3.5 h-3.5" />
+                        INCIDENT FIELD PHOTOS
+                      </div>
+                      <div className="flex gap-2 overflow-x-auto pb-1">
+                        {selectedAlertForMitigation.incidentPhotos.map((photo, i) => (
+                          <div key={i} className="shrink-0 rounded-lg overflow-hidden border border-[#1E2E42] w-[150px]">
+                            <img
+                              src={photo.url}
+                              alt={photo.caption}
+                              className="w-full h-[90px] object-cover"
+                            />
+                            <div className="px-1.5 py-1 bg-[#070D14] text-[9px] font-mono text-[#64748B] leading-tight">
+                              {photo.caption}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Embedded YouTube Operational Guide Video */}
+                  <div className="mb-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-[10px] font-mono uppercase text-[#F59E0B] font-bold flex items-center gap-1.5">
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        TECHNICAL VIDEO DEMO
+                      </div>
+                      <a
+                        href={`https://www.youtube.com/watch?v=${selectedAlertForMitigation.youtubeId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[10px] font-mono text-[#38BDF8] hover:underline flex items-center gap-1"
+                      >
+                        <span>Open on YouTube</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+
+                    <div className="relative aspect-video w-full rounded-xl overflow-hidden border border-[#1C2C3E] bg-black">
+                      <iframe
+                        src={`https://www.youtube-nocookie.com/embed/${selectedAlertForMitigation.youtubeId}?autoplay=0&rel=0`}
+                        title={selectedAlertForMitigation.youtubeTitle}
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                        className="w-full h-full"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Modal Footer with Acknowledge Button */}
+                  <div className="flex items-center justify-between pt-3 border-t border-[#162332] text-[10px] font-mono text-[#64748B]">
+                    <span>Real-time correlation: {selectedAlertForMitigation.reason}</span>
+                    <div className="flex items-center gap-2">
+                      {!selectedAlertForMitigation.acknowledged ? (
+                        <button
+                          onClick={(e) => {
+                            handleAcknowledge(selectedAlertForMitigation.id, e);
+                          }}
+                          className="px-4 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-colors bg-[#EF4444] text-white hover:bg-[#DC2626]"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Acknowledge Alert</span>
+                        </button>
+                      ) : (
+                        <span className="px-4 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 bg-[#10B981]/20 text-[#10B981] border border-[#10B981]">
+                          <Check className="w-3.5 h-3.5" />
+                          Acknowledged
+                        </span>
+                      )}
+                      <button
+                        onClick={() => setSelectedAlertForMitigation(null)}
+                        className="px-3 py-1.5 rounded-lg bg-[#141F2D] hover:bg-[#1E2E42] text-white text-xs transition-colors"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
+              </div>
+            )}
 
-      {/* ── Historical Alert Log ─────────────────────────────────────── */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.4 }}
-        className="mt-6"
-      >
-        <Accordion>
-          <AccordionItem value="history" className="border border-border/60 rounded-xl px-5 bg-card">
-            <AccordionTrigger className="text-sm font-semibold py-4 hover:no-underline">
-              Historical Alert Log ({HISTORICAL_ALERTS.length})
-            </AccordionTrigger>
-            <AccordionContent className="space-y-3 pb-4">
-              {HISTORICAL_ALERTS.map(alert => (
-                <AlertCard key={alert.id} alert={alert} isNew={false} />
-              ))}
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
-      </motion.div>
+            {/* Lessons Learned Highlight Card matching Reference Image 4 */}
+            <div className="p-4 rounded-xl bg-gradient-to-r from-[#0E1714] to-[#0A1210] border border-[#10B981]/40 text-xs">
+              <div className="text-[10px] font-mono uppercase text-[#10B981] font-bold mb-1 flex items-center gap-1.5">
+                <Info className="w-3.5 h-3.5" />
+                LESSONS LEARNED / INSTITUTIONAL MEMORY
+              </div>
+              <p className="text-white font-medium leading-relaxed mb-2">
+                3 of 4 offset wells saw mud losses at Tipam/Girujan contact (2,442 m).
+              </p>
+              <div className="p-2 rounded bg-black/40 border border-[#10B981]/30 font-mono text-[11px] text-[#34D399]">
+                ✓ Recommended: reduce ECD by 0.3 ppg before entering.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom Horizon Predictive Risk Bar matching Reference Image 4 */}
+        <div className="mt-6 p-4 rounded-xl bg-[#0A0F16] border border-[#172332]">
+          <div className="flex items-center justify-between text-[10px] font-mono text-[#7E8B9B] mb-2">
+            <span className="uppercase tracking-wider">FORMATION RISK HORIZON</span>
+            <span className="text-[#EF4444] font-bold">Potential Risk at 2,442 m (92% confidence)</span>
+          </div>
+
+          <div className="w-full h-3 rounded-full bg-[#121B27] overflow-hidden relative">
+            {/* Horizon Timeline Segments */}
+            <div className="h-full bg-[#10B981] absolute left-0 w-[55%]" />
+            <div className="h-full bg-[#F59E0B] absolute left-[55%] w-[15%]" />
+            <div className="h-full bg-[#EF4444] absolute left-[70%] w-[10%]" />
+            <div className="h-full bg-[#10B981] absolute left-[80%] w-[20%]" />
+            
+            {/* Current drill bit indicator on timeline */}
+            <div
+              style={{ left: `${(currentDepth / 3500) * 100}%` }}
+              className="absolute top-0 bottom-0 w-2 bg-white shadow-md -translate-x-1/2"
+            />
+          </div>
+
+          <div className="flex items-center justify-between text-[10px] font-mono text-[#64748B] mt-2">
+            <span>Next 250 m horizon</span>
+            <span className="text-white font-bold">Current: {currentDepth} m</span>
+            <span>Target: 3,500 m</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

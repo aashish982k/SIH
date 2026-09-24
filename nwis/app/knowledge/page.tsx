@@ -19,6 +19,7 @@ import {
   FileText, ArrowRight, ChevronDown, Sparkles
 } from 'lucide-react';
 import type { KnowledgeEntry, IncidentType, RiskLevel } from '@/lib/types';
+import { TacticalSidebar } from '@/components/layout/Sidebar';
 
 const PAGE_SIZE = 8;
 
@@ -160,30 +161,39 @@ export default function KnowledgePage() {
   if (formationFilter !== 'all') activeFilters.push({ label: formationFilter, clear: () => setFormationFilter('all') });
 
   return (
-    <div className="mx-auto max-w-[1400px] px-4 md:px-6 py-8">
-      {/* ── Page Header ──────────────────────────────────────────────── */}
-      <motion.div
-        initial={{ opacity: 0, y: -12 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mb-8"
-      >
-        <div className="flex items-center gap-2 mb-1">
-          <BookOpen className="w-5 h-5 text-primary" />
-          <h1 className="text-2xl font-bold text-foreground">Knowledge Repository</h1>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Searchable archive of drilling incidents, lessons learned, and mitigations across all offset wells
-        </p>
-      </motion.div>
+    <div className="flex min-h-[calc(100vh-49px)] w-full bg-[#070A0E] text-white">
+      {/* Tactical Left Sidebar */}
+      <TacticalSidebar />
 
-      <div className="flex flex-col lg:flex-row gap-6">
-        {/* ── Filter Sidebar ────────────────────────────────────────── */}
-        <motion.aside
-          initial={{ opacity: 0, x: -16 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.1 }}
-          className="lg:w-60 shrink-0"
+      <div className="flex-1 p-6 md:p-8 overflow-y-auto max-w-[1500px]">
+        {/* ── Page Header ──────────────────────────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: -12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="pb-6 border-b border-[#141F2D] mb-6"
         >
+          <div className="text-[10px] font-mono tracking-widest text-[#7E8B9B] uppercase mb-1">
+            HISTORICAL DRILLING REPOSITORY · OIL INDIA LIMITED
+          </div>
+          <div className="flex items-center gap-2 mb-1">
+            <BookOpen className="w-5 h-5 text-[#F59E0B]" />
+            <h1 className="text-2xl sm:text-3xl font-semibold text-white tracking-tight">
+              Knowledge Repository
+            </h1>
+          </div>
+          <p className="text-xs text-[#8A9BAE] mt-0.5">
+            Searchable institutional memory of offset-well incidents, proven mitigations, and lessons learned across Assam Basin.
+          </p>
+        </motion.div>
+
+        <div className="flex flex-col lg:flex-row gap-6">
+          {/* ── Filter Sidebar ────────────────────────────────────────── */}
+          <motion.aside
+            initial={{ opacity: 0, x: -16 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.1 }}
+            className="lg:w-64 shrink-0"
+          >
           <div className="sticky top-24 space-y-1">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground px-1 mb-3">
               <Filter className="w-3.5 h-3.5 inline mr-1.5" />Filters
@@ -379,5 +389,6 @@ export default function KnowledgePage() {
         </div>
       </div>
     </div>
+  </div>
   );
 }

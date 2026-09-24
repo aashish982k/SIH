@@ -26,6 +26,11 @@ export default function AdminPage() {
   const router = useRouter();
   const { isAdmin, logout } = useAppStore();
 
+  function handleLogout() {
+    logout();
+    router.push('/');
+  }
+
   if (!isAdmin) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
