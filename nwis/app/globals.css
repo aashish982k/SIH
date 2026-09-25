@@ -1,74 +1,83 @@
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300..700;1,300..700&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Kodchasan:ital,wght@0,200;0,300;0,400;0,500;0,600;0,700;1,200;1,300;1,400;1,500;1,600;1,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,200..900;1,8..60,200..900&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
 
-/* ─── NWIS Design Tokens — Midnight & Aqua ──────────────────── */
-/* Fonts are injected by next/font in app/layout.tsx as CSS variables.        */
+/* ─── NWIS Design Tokens ──────────────────── */
 :root {
   color-scheme: dark;
 
-  /* Surfaces */
-  --background:           #06090F;
-  --foreground:           #F8FAFC;
+  /* Surfaces - Neutral Dark (Zinc) instead of Navy */
+  --nwis-deep-navy: #09090B; /* Zinc 950 */
+  --nwis-navy: #18181B; /* Zinc 900 */
+  --nwis-slate-blue: #27272A; /* Zinc 800 */
+  --nwis-cream: #FCF1D0; /* Keeping cream as accent */
 
-  --card:                 #0C121E;
-  --card-foreground:      #F8FAFC;
-  --popover:              #0C121E;
-  --popover-foreground:   #F8FAFC;
+  --bg-surface-raised: #27272A; /* Zinc 800 */
 
-  /* Primary: Neon Aqua */
-  --primary:              #00E5FF;
-  --primary-foreground:   #000000;
+  --background:           var(--nwis-deep-navy);
+  --foreground:           #FAFAFA; /* Zinc 50 */
 
-  /* Secondary: Deep Blue */
-  --secondary:            #3B82F6;
+  --card:                 var(--nwis-navy);
+  --card-foreground:      #FAFAFA;
+  --popover:              var(--nwis-navy);
+  --popover-foreground:   #FAFAFA;
+
+  /* Primary: Cream */
+  --primary:              var(--nwis-cream);
+  --primary-foreground:   #09090B;
+
+  /* Secondary: Neutral Gray */
+  --secondary:            var(--nwis-slate-blue);
   --secondary-foreground: #FFFFFF;
 
-  --muted:                #1E293B;
-  --muted-foreground:     #94A3B8;
-  --accent:               #00E5FF;
-  --accent-foreground:    #000000;
-  --destructive:          #EF4444;
+  --muted:                var(--bg-surface-raised);
+  --muted-foreground:     #A1A1AA; /* Zinc 400 */
+  
+  --accent:               var(--nwis-slate-blue);
+  --accent-foreground:    #FFFFFF;
+  
+  --destructive:          #D9534F;
+  --destructive-foreground: #FFFFFF;
 
   /* Borders */
-  --border:               #1E293B;
-  --input:                #1E293B;
-  --ring:                 #00E5FF;
+  --border:               rgba(255, 255, 255, 0.08);
+  --input:                var(--bg-surface-raised);
+  --ring:                 var(--nwis-cream);
 
   /* Border radii */
   --radius: 12px;
 
-  /* Risk severity — Standard semantics */
-  --risk-low:             #3B82F6;   /* Info / Low */
-  --risk-medium:          #F59E0B;   /* Warning */
-  --risk-high:            #EF4444;   /* High */
-  --risk-critical:        #991B1B;   /* Critical */
+  /* Risk severity — Restrained Semantics */
+  --risk-info:            var(--nwis-slate-blue);
+  --risk-low:             var(--nwis-slate-blue);
+  --risk-medium:          #E0A93B;   /* Muted Amber */
+  --risk-high:            #D9534F;   /* Muted Red */
+  --risk-critical:        #D9534F;   /* Muted Red */
 
-  /* Chart palette */
-  --chart-1: #00E5FF;
-  --chart-2: #3B82F6;
-  --chart-3: #8B5CF6;
-  --chart-4: #F59E0B;
-  --chart-5: #10B981;
+  /* Chart palette - Grays + Cream derivatives */
+  --chart-1: var(--nwis-slate-blue);
+  --chart-2: var(--nwis-cream);
+  --chart-3: #52525B; /* Zinc 600 */
+  --chart-4: #A1A1AA; /* Zinc 400 */
+  --chart-5: #3F3F46; /* Zinc 700 */
 
   /* Sidebar */
-  --sidebar:                    #06090F;
-  --sidebar-foreground:         #F8FAFC;
-  --sidebar-primary:            #00E5FF;
-  --sidebar-primary-foreground: #000000;
-  --sidebar-accent:             #1E293B;
-  --sidebar-accent-foreground:  #F8FAFC;
-  --sidebar-border:             #1E293B;
-  --sidebar-ring:               #00E5FF;
+  --sidebar:                    var(--nwis-deep-navy);
+  --sidebar-foreground:         #FAFAFA;
+  --sidebar-primary:            var(--nwis-cream);
+  --sidebar-primary-foreground: #09090B;
+  --sidebar-accent:             var(--nwis-slate-blue);
+  --sidebar-accent-foreground:  #FFFFFF;
+  --sidebar-border:             rgba(255, 255, 255, 0.08);
+  --sidebar-ring:               var(--nwis-cream);
 
-  /* Map marker palette (WellMap + legend) */
-  --map-active:           #00E5FF;
-  --map-high:             #EF4444;
-  --map-medium:           #F59E0B;
-  --map-low:              #3B82F6;
+  /* Map marker palette */
+  --map-active:           var(--nwis-cream);
+  --map-high:             #D9534F;
+  --map-medium:           #E0A93B;
+  --map-low:              var(--nwis-slate-blue);
 }
 
 @theme inline {
@@ -104,21 +113,29 @@
   --color-sidebar-border:       var(--sidebar-border);
   --color-sidebar-ring:         var(--sidebar-ring);
 
-  /* Risk colors as Tailwind tokens */
+  /* NWIS custom colors */
+  --color-nwis-deep-navy: var(--nwis-deep-navy);
+  --color-nwis-navy:      var(--nwis-navy);
+  --color-nwis-slate-blue: var(--nwis-slate-blue);
+  --color-nwis-cream:     var(--nwis-cream);
+  --color-bg-surface-raised: var(--bg-surface-raised);
+
+  /* Risk colors */
+  --color-risk-info:     var(--risk-info);
   --color-risk-low:      var(--risk-low);
   --color-risk-medium:   var(--risk-medium);
   --color-risk-high:     var(--risk-high);
   --color-risk-critical: var(--risk-critical);
 
-  --radius-sm:  calc(var(--radius) * 0.5);   /* ~7px buttons/inputs */
-  --radius-md:  calc(var(--radius) * 0.7);   /* ~10px */
-  --radius-lg:  var(--radius);               /* 14px cards */
-  --radius-xl:  calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-sm:  8px;
+  --radius-md:  12px;
+  --radius-lg:  16px;
+  --radius-xl:  20px;
+  --radius-2xl: 24px;
 
   /* Fonts */
-  --font-sans: 'Source Serif 4', serif;
-  --font-display: 'Source Serif 4', serif;
+  --font-sans: var(--font-inter), 'Inter', sans-serif;
+  --font-display: var(--font-inter), 'Inter', sans-serif;
   --font-mono: var(--font-jetbrains), 'Courier New', monospace;
 }
 
@@ -130,11 +147,9 @@
   }
 
   html {
-    font-family: 'Source Serif 4', serif;
+    font-family: var(--font-inter), sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    scroll-behavior: smooth;
-    /* Lenis smooth-scroll interplay */
     scroll-behavior: auto;
   }
 
@@ -145,14 +160,12 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  /* Display headings: Space Grotesk, balanced wrapping */
   h1, h2, .font-display {
-    font-family: 'Source Serif 4', serif;
+    font-family: var(--font-inter), sans-serif; 
     text-wrap: balance;
     letter-spacing: -0.02em;
   }
 
-  /* Monospace for depth values, coordinates, technical numbers */
   .font-mono,
   [data-depth],
   [data-coords] {
@@ -160,12 +173,10 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* Tabular figures everywhere numbers are compared */
   table, .tabular-nums {
     font-variant-numeric: tabular-nums;
   }
 
-  /* Reduced motion: kill all keyframe loops & transitions */
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
       animation-duration: 0.01ms !important;
@@ -178,23 +189,24 @@
 
 /* ─── Utility Classes ───────────────────────────────────────────────────────── */
 @layer utilities {
-  /* Risk severity system — used across all pages consistently */
+  .risk-info     { color: var(--risk-info); }
   .risk-low      { color: var(--risk-low); }
   .risk-medium   { color: var(--risk-medium); }
   .risk-high     { color: var(--risk-high); }
   .risk-critical { color: var(--risk-critical); }
 
+  .bg-risk-info     { background-color: color-mix(in oklch, var(--risk-info) 12%, transparent); }
   .bg-risk-low      { background-color: color-mix(in oklch, var(--risk-low) 12%, transparent); }
   .bg-risk-medium   { background-color: color-mix(in oklch, var(--risk-medium) 12%, transparent); }
   .bg-risk-high     { background-color: color-mix(in oklch, var(--risk-high) 12%, transparent); }
   .bg-risk-critical { background-color: color-mix(in oklch, var(--risk-critical) 12%, transparent); }
 
+  .border-risk-info     { border-color: var(--risk-info); }
   .border-risk-low      { border-color: var(--risk-low); }
   .border-risk-medium   { border-color: var(--risk-medium); }
   .border-risk-high     { border-color: var(--risk-high); }
   .border-risk-critical { border-color: var(--risk-critical); }
 
-  /* GSAP text-reveal masks: overflow-hidden line wrappers */
   .reveal-line {
     display: block;
     overflow: hidden;
@@ -204,16 +216,15 @@
     will-change: transform;
   }
 
-  /* Subtle card hover — compositor-only properties */
+  /* Card hover — restricted */
   .card-hover {
     transition: box-shadow 0.2s ease, border-color 0.2s ease;
   }
   .card-hover:hover {
-    box-shadow: 0 0 0 1px var(--primary-foreground, transparent), 0 8px 32px -8px oklch(0 0 0 / 60%);
-    border-color: color-mix(in oklch, var(--primary) 30%, var(--border));
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(1, 7, 54, 0.35);
+    border-color: var(--nwis-slate-blue);
   }
 
-  /* Pulsing "live" dot for real-time indicators (stops under reduced motion via base layer) */
   .pulse-live {
     animation: pulse-live 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
@@ -222,7 +233,6 @@
     50% { opacity: 0.4; }
   }
 
-  /* Alert new-arrival flash */
   .alert-flash {
     animation: alert-flash 0.6s ease-out;
   }
@@ -231,12 +241,12 @@
     100% { background-color: transparent; }
   }
 
-  /* Mapbox popup + controls — dark graphite theme */
+  /* Mapbox popup */
   .mapboxgl-popup-content {
     padding: 0 !important;
-    border-radius: 14px !important;
+    border-radius: 12px !important;
     background: var(--popover) !important;
-    box-shadow: 0 4px 32px -4px oklch(0 0 0 / 70%) !important;
+    box-shadow: 0 4px 32px -4px rgba(1, 7, 54, 0.7) !important;
     border: 1px solid var(--border) !important;
     overflow: hidden;
   }
@@ -254,7 +264,7 @@
   }
 }
 
-/* ─── Scrollbar — graphite ───────────────────────────────────────────────────── */
+/* ─── Scrollbar — NWIS ───────────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -263,9 +273,9 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: oklch(1 0 0 / 14%);
+  background: var(--nwis-slate-blue);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: oklch(1 0 0 / 24%);
+  background: #4A6BB5;
 }

@@ -3,6 +3,7 @@
 export type RiskLevel = 'low' | 'medium' | 'high' | 'critical';
 export type IncidentType = 'mud_loss' | 'kick' | 'stuck_pipe' | 'npt' | 'blowout' | 'washout';
 export type WellStatus = 'active' | 'completed' | 'suspended' | 'abandoned';
+export type LocationPrecision = 'exact' | 'approximate';
 export type AlertStatus = 'new' | 'acknowledged' | 'resolved';
 export type UploadStatus = 'queued' | 'processing' | 'extracted' | 'error' | 'saved';
 
@@ -53,6 +54,7 @@ export interface Well {
   operator: string;
   status: WellStatus;
   coordinates: Coordinates;
+  locationPrecision?: LocationPrecision;
   spudDate: string;       // ISO date
   completionDate?: string;
   totalDepthFt: number;

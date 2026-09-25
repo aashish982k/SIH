@@ -16,6 +16,7 @@ import riskRoutes from './routes/riskRoutes';
 import recommendationRoutes from './routes/recommendationRoutes';
 import alertRoutes from './routes/alertRoutes';
 import knowledgeRoutes from './routes/knowledgeRoutes';
+import documentRoutes from './routes/documentRoutes';
 
 const app = express();
 
@@ -46,6 +47,7 @@ app.use('/api/risks', riskRoutes);
 app.use('/api/recommendations', recommendationRoutes);
 app.use('/api/alerts', alertRoutes);
 app.use('/api/knowledge', knowledgeRoutes);
+app.use('/api/documents', documentRoutes);
 
 // ── 404 handler ───────────────────────────────────────────────
 app.use((_req, res) => {

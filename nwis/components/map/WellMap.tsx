@@ -12,15 +12,15 @@ mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? '';
 // ─── Popup theme — dark graphite, hex mirrors of globals.css tokens ──────────
 // (Mapbox popups render outside React; inline styles need concrete values.)
 const POPUP_COLORS = {
-  text: '#F4F6FB',
-  muted: '#94a3b8',
-  bg: '#0D1C42',
-  high: '#EF4444',
-  medium: '#F59E0B',
-  ok: '#124375',
+  text: '#FAFAFA',
+  muted: '#A1A1AA',
+  bg: '#18181B',
+  high: '#D9534F',
+  medium: '#E0A93B',
+  ok: '#27272A',
   accent: '#FCF1D0',
   accentHover: '#F5E6B8',
-  accentText: '#010736',
+  accentText: '#09090B',
 };
 
 // ─── Marker Color by risk/incident history ────────────────────────────────────
@@ -38,6 +38,9 @@ function createPopupHTML(well: Well, distance?: number, reportCount = 0): string
   const highRisk = incidents.filter(i => i.severity === 'high' || i.severity === 'critical');
   const color = getMarkerColor(well);
   const c = POPUP_COLORS;
+  const approximateLocationNote = well.locationPrecision === 'approximate'
+    ? 'Approximate location — estimated from field/basin name, not exact coordinates. Search radius widened by 50km to account for this.'
+    : '';
 
   return `
     <div style="font-family: Inter, system-ui, sans-serif; padding: 14px; min-width: 220px; background:${c.bg};">
@@ -85,6 +88,7 @@ function createPopupHTML(well: Well, distance?: number, reportCount = 0): string
       <div style="margin-top:6px; font-size:9px; color:${c.muted}; text-align:center;">
         ${incidents.length > 0 ? `${getIncidentLabel(incidents[0].type)} · ${getRiskLabel(incidents[0].severity)} risk` : 'No incidents recorded'}
       </div>
+      ${approximateLocationNote ? `<div style="margin-top:8px; padding:6px; border:1px dashed #F59E0B; color:#FCD34D; font-size:10px; line-height:1.35;">${approximateLocationNote}</div>` : ''}
     </div>
   `;
 }
@@ -246,6 +250,8 @@ export default function WellMap({
         width:16px; height:16px; border-radius:50%;
         background:${color}; border:2.5px solid white;
         box-shadow: 0 2px 6px ${color}66;
+        opacity:${well.locationPrecision === 'approximate' ? '0.5' : '1'};
+        ${well.locationPrecision === 'approximate' ? 'outline:2px dashed #F59E0B; outline-offset:2px;' : ''}
         cursor:pointer; transition: transform 0.15s;
       `;
       el.addEventListener('mouseenter', () => { el.style.transform = 'scale(1.3)'; });

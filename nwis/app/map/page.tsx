@@ -113,7 +113,7 @@ export default function MapPage() {
     }
   }, [setMapCenter]);
 
-  useEffect(() => {
+  const loadBackendWells = useCallback(() => {
     fetch('/api/wells', { cache: 'no-store' })
       .then((response) => response.json())
       .then((payload) => {
@@ -121,6 +121,7 @@ export default function MapPage() {
         setBackendWells(rows.map((well: Record<string, unknown>) => ({
           ...well,
           field: String(well.field_name ?? ''),
+          locationPrecision: well.location_precision === 'approximate' ? 'approximate' : 'exact',
           coordinates: { lat: Number(well.latitude), lng: Number(well.longitude) },
           spudDate: String(well.spud_date ?? ''),
           totalDepthFt: Number(well.total_depth_ft ?? 0),
@@ -131,6 +132,13 @@ export default function MapPage() {
       })
       .catch(() => setBackendWells([]));
   }, []);
+
+  useEffect(() => {
+    void loadBackendWells();
+    const refresh = () => { void loadBackendWells(); };
+    window.addEventListener('nwis:well-created', refresh);
+    return () => window.removeEventListener('nwis:well-created', refresh);
+  }, [loadBackendWells]);
 
   async function searchLocation() {
     if (!locationQuery.trim()) return;
@@ -195,7 +203,7 @@ export default function MapPage() {
         ),
         incidents: getIncidentsForWell(w.id),
       }))
-      .filter(w => w.distance <= mapRadius)
+      .filter(w => w.distance <= mapRadius + (w.locationPrecision === 'approximate' ? 50 : 0))
       .filter(w => {
         if (formationFilter === 'all') return true;
         return w.formations.some(f => f.name.toLowerCase().includes(formationFilter.toLowerCase()));
@@ -396,6 +404,16 @@ export default function MapPage() {
                 <span className="text-[10px] text-muted-foreground leading-tight">{label}</span>
               </div>
             ))}
+            <div className="flex items-center gap-1.5">
+            <span aria-hidden="true" className="w-3 h-3 rounded-full shrink-0 border-2 border-amber-300/70 shadow-sm opacity-50"
+              style={{ backgroundColor: 'var(--map-low)' }} />
+            <span className="text-[10px] text-muted-foreground leading-tight">Approximate location</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+            <span aria-hidden="true" className="w-3 h-3 rounded-full shrink-0 border-2 border-white/20 shadow-sm"
+              style={{ backgroundColor: 'var(--map-low)' }} />
+            <span className="text-[10px] text-muted-foreground leading-tight">Exact location</span>
+            </div>
           </div>
         </div>
       </motion.aside>

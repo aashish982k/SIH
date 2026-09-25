@@ -35,6 +35,8 @@ export const wells = mysqlTable("wells", {
   operator:          varchar("operator", { length: 120 }).notNull().default("Oil India Limited"),
   latitude:          decimal("latitude",  { precision: 10, scale: 7 }).notNull(),
   longitude:         decimal("longitude", { precision: 10, scale: 7 }).notNull(),
+  location_precision: mysqlEnum("location_precision", ["exact", "approximate"]).notNull().default("exact"),
+  created_by:        char("created_by", { length: 36 }).references(() => users.id),
   elevation_m:       decimal("elevation_m", { precision: 8, scale: 2 }),
   total_depth_ft:    decimal("total_depth_ft", { precision: 10, scale: 2 }),
   status:            mysqlEnum("status", ["active","suspended","completed","abandoned"]).notNull().default("active"),
@@ -47,6 +49,21 @@ export const wells = mysqlTable("wells", {
   idxStatus:  index("idx_wells_status").on(t.status),
   idxField:   index("idx_wells_field").on(t.field_name),
   idxLatLng:  index("idx_wells_lat_lng").on(t.latitude, t.longitude),
+}));
+
+export const field_contributions = mysqlTable("field_contributions", {
+  id:             char("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
+  well_id:        char("well_id", { length: 36 }).notNull().references(() => wells.id, { onDelete: "cascade" }),
+  field_name:     varchar("field_name", { length: 64 }).notNull(),
+  filled_by:      char("filled_by", { length: 36 }).notNull().references(() => users.id),
+  filled_at:      datetime("filled_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  previous_value: text("previous_value"),
+  new_value:      text("new_value").notNull(),
+  reversed_at:    datetime("reversed_at"),
+  reversed_by:    char("reversed_by", { length: 36 }).references(() => users.id),
+}, (t) => ({
+  idxWell: index("idx_field_contributions_well").on(t.well_id),
+  idxField: index("idx_field_contributions_field").on(t.well_id, t.field_name),
 }));
 
 // ─── 3. WELL_SURVEYS ─────────────────────────────────────────────────────────
@@ -204,6 +221,10 @@ export const documents = mysqlTable("documents", {
   status:          mysqlEnum("status", ["uploaded","processing","processed","failed"]).notNull().default("uploaded"),
   processing_checkpoint: varchar("processing_checkpoint", { length: 80 }),
   processing_error: text("processing_error"),
+  well_resolution: varchar("well_resolution", { length: 32 }),
+  resolved_well_name: varchar("resolved_well_name", { length: 120 }),
+  resolved_latitude: decimal("resolved_latitude", { precision: 10, scale: 7 }),
+  resolved_longitude: decimal("resolved_longitude", { precision: 10, scale: 7 }),
   created_at:      datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updated_at:      datetime("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (t) => ({

@@ -297,8 +297,54 @@ ocr_engine = None
 def get_ocr():
     global ocr_engine
     if ocr_engine is None and PaddleOCR is not None:
-        ocr_engine = PaddleOCR(use_angle_cls=True, lang='en', show_log=False)
+        # PaddleOCR 3.x removed show_log and replaced angle classification with
+        # text-line orientation. Keep initialization compatible with the
+        # installed API so scanned/rotated report pages reach the extractor.
+        try:
+            ocr_engine = PaddleOCR(
+                use_textline_orientation=True,
+                lang='en',
+                enable_mkldnn=False,
+            )
+        except TypeError:
+            ocr_engine = PaddleOCR(use_angle_cls=True, lang='en')
     return ocr_engine
+
+def ocr_image_text(engine, image: bytes) -> str:
+    """Return text across PaddleOCR 2.x and 3.x result shapes."""
+    import cv2
+    import numpy as np
+    decoded_image = cv2.imdecode(np.frombuffer(image, dtype=np.uint8), cv2.IMREAD_COLOR)
+    if decoded_image is None:
+        return ""
+    if hasattr(engine, "predict"):
+        results = engine.predict(decoded_image)
+        texts: list[str] = []
+        for result in results or []:
+            payload = getattr(result, "json", None)
+            if callable(payload):
+                payload = payload()
+            if isinstance(payload, str):
+                import json as _json
+                payload = _json.loads(payload)
+            if payload is None:
+                payload = getattr(result, "res", None)
+            if payload is None:
+                payload = result
+            if isinstance(payload, dict):
+                payload = payload.get("res", payload)
+                texts.extend(str(value) for value in payload.get("rec_texts", []) if value)
+            else:
+                rec_texts = getattr(payload, "rec_texts", None)
+                if rec_texts:
+                    texts.extend(str(value) for value in rec_texts if value)
+        return " ".join(texts)
+
+    result = engine.ocr(decoded_image, cls=True)
+    return " ".join(
+        line[1][0] for block in (result or [])
+        for line in (block or []) if line
+    )
 
 @app.post("/ocr")
 async def extract_text(req: OCRRequest) -> dict:
@@ -317,18 +363,10 @@ async def extract_text(req: OCRRequest) -> dict:
                 pix = page.get_pixmap(dpi=150)
                 img_bytes = pix.tobytes("png")
                 engine = get_ocr()
-                result = engine.ocr(img_bytes, cls=True) if engine else []
-                text = " ".join(
-                    line[1][0] for block in (result or [])
-                    for line in (block or []) if line
-                )
+                text = ocr_image_text(engine, img_bytes) if engine else ""
             pages_text.append(text)
         return {"text": "\n\n".join(pages_text), "pages": len(pages_text)}
     else:
         engine = get_ocr()
-        result = engine.ocr(raw, cls=True) if engine else []
-        text = " ".join(
-            line[1][0] for block in (result or [])
-            for line in (block or []) if line
-        )
+        text = ocr_image_text(engine, raw) if engine else ""
         return {"text": text, "pages": 1}

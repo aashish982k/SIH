@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import { use, useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
@@ -17,8 +17,10 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   ArrowLeft, MapPin, Calendar, Layers, AlertTriangle,
-  FileText, GitCompare, ChevronRight, Clock, Ruler, Zap
+  FileText, GitCompare, ChevronRight, Clock, Ruler, Zap, Plus
 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import type { Incident } from '@/lib/types';
 import { useAppStore } from '@/store/appStore';
 import { ScatterChart, Scatter, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from 'recharts';
@@ -192,42 +194,93 @@ export default function WellDetailPage({ params }: { params: Promise<{ id: strin
   const [activeSection, setActiveSection] = useState('overview');
 
   const [well, setWell] = useState<typeof MOCK_WELLS[number] | null>(null);
+  const [rawWell, setRawWell] = useState<Record<string, unknown> | null>(null);
+  const [contributions, setContributions] = useState<Array<Record<string, unknown>>>([]);
+  const [addDetailOpen, setAddDetailOpen] = useState(false);
+  const [detailValues, setDetailValues] = useState<Record<string, string>>({});
+  const [detailError, setDetailError] = useState('');
+  const [detailSaving, setDetailSaving] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
+  const loadWell = useCallback(async () => {
+    const response = await fetch(`/api/wells/${encodeURIComponent(id)}`, { cache: 'no-store' });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.message || payload.error || 'Well not found');
+    const row = payload.data?.well as Record<string, unknown>;
+    setRawWell(row);
+    setContributions((row.contributions as Array<Record<string, unknown>>) ?? []);
+    setWell({
+      id: String(row.id),
+      name: String(row.name),
+      block: String(row.block ?? ''),
+      field: String(row.field_name ?? ''),
+      operator: String(row.operator ?? ''),
+      status: row.status as typeof MOCK_WELLS[number]['status'],
+      coordinates: { lat: Number(row.latitude), lng: Number(row.longitude) },
+      spudDate: row.spud_date ? String(row.spud_date) : '',
+      completionDate: row.completion_date ? String(row.completion_date) : undefined,
+      totalDepthFt: Number(row.total_depth_ft ?? 0),
+      currentDepthFt: Number(row.total_depth_ft ?? 0),
+      measuredDepthFt: Number(row.total_depth_ft ?? 0),
+      trueVerticalDepthFt: Number(row.total_depth_ft ?? 0),
+      inclination: 0, azimuth: 0, casingProgram: [], formations: [], incidents: [],
+    });
+  }, [id]);
+
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/wells/${encodeURIComponent(id)}`, { cache: 'no-store' })
-      .then(async response => {
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload.message || payload.error || 'Well not found');
-        return payload.data?.well;
-      })
-      .then((row) => {
-        if (cancelled || !row) return;
-        setWell({
-          id: String(row.id),
-          name: String(row.name),
-          block: String(row.block ?? ''),
-          field: String(row.field_name ?? ''),
-          operator: String(row.operator ?? ''),
-          status: row.status,
-          coordinates: { lat: Number(row.latitude), lng: Number(row.longitude) },
-          spudDate: String(row.spud_date ?? ''),
-          completionDate: row.completion_date ? String(row.completion_date) : undefined,
-          totalDepthFt: Number(row.total_depth_ft ?? 0),
-          currentDepthFt: Number(row.total_depth_ft ?? 0),
-          measuredDepthFt: Number(row.total_depth_ft ?? 0),
-          trueVerticalDepthFt: Number(row.total_depth_ft ?? 0),
-          inclination: 0,
-          azimuth: 0,
-          casingProgram: [],
-          formations: [],
-          incidents: [],
-        });
-      })
+    setIsAuthenticated(Boolean(localStorage.getItem('nwis_token')));
+    loadWell()
       .catch(() => { if (!cancelled) setWell(null); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [id]);
+  }, [loadWell]);
+
+  const fillableFields = [
+    { key: 'field_name', label: 'Field name', type: 'text' },
+    { key: 'block', label: 'Block', type: 'text' },
+    { key: 'operator', label: 'Operator', type: 'text' },
+    { key: 'elevation_m', label: 'Elevation (m)', type: 'number' },
+    { key: 'total_depth_ft', label: 'Total depth (ft)', type: 'number' },
+    { key: 'status', label: 'Status', type: 'status' },
+    { key: 'spud_date', label: 'Spud date', type: 'date' },
+    { key: 'completion_date', label: 'Completion date', type: 'date' },
+    { key: 'primary_formation', label: 'Primary formation', type: 'text' },
+  ] as const;
+  const emptyFields = rawWell
+    ? fillableFields.filter(({ key }) => rawWell[key] === null || rawWell[key] === undefined || rawWell[key] === '')
+    : [];
+  const contributionFor = (field: string) => contributions.find((entry) => entry.field_name === field && !entry.reversed_at);
+  const openAddDetail = () => {
+    setDetailError('');
+    setDetailValues({});
+    setAddDetailOpen(true);
+  };
+  async function saveDetails(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const values = Object.fromEntries(Object.entries(detailValues).filter(([, value]) => value.trim()));
+    if (!Object.keys(values).length) { setDetailError('Enter at least one detail.'); return; }
+    setDetailSaving(true);
+    setDetailError('');
+    try {
+      const token = localStorage.getItem('nwis_token') ?? '';
+      const response = await fetch(`/api/wells/${encodeURIComponent(id)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(Object.fromEntries(Object.entries(values).map(([key, value]) => (
+          ['elevation_m', 'total_depth_ft'].includes(key) ? [key, Number(value)] : [key, value]
+        )))),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || payload.error || 'Unable to add details');
+      setAddDetailOpen(false);
+      await loadWell();
+    } catch (error) {
+      setDetailError(error instanceof Error ? error.message : 'Unable to add details');
+    } finally {
+      setDetailSaving(false);
+    }
+  }
   const incidents = well ? getIncidentsForWell(well.id) : [];
   const reports = MOCK_REPORTS.filter(r => r.wellId === id);
 
@@ -299,6 +352,73 @@ export default function WellDetailPage({ params }: { params: Promise<{ id: strin
           </Link>
         </div>
       </motion.div>
+
+      <Card className="border-border/60 mb-6">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <div>
+            <CardTitle className="text-base">Well details</CardTitle>
+            <p className="text-xs text-muted-foreground mt-1">Help complete missing metadata. Existing values cannot be overwritten.</p>
+          </div>
+          {isAuthenticated && emptyFields.length > 0 && (
+            <Button size="sm" variant="outline" onClick={openAddDetail}>
+              <Plus className="w-3.5 h-3.5 mr-1" /> Add details
+            </Button>
+          )}
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          {fillableFields.map(({ key, label }) => {
+            const value = rawWell?.[key];
+            const contribution = contributionFor(key);
+            const empty = value === null || value === undefined || value === '';
+            return (
+              <div key={key} className="rounded-lg border border-border/60 p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+                <p className={cn('text-sm mt-1', empty ? 'text-muted-foreground italic' : 'text-foreground')}>
+                  {empty ? 'Missing' : String(value)}
+                </p>
+                {contribution && (
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Added by {String(contribution.filled_by_name)} · {formatDate(String(contribution.filled_at))}
+                  </p>
+                )}
+                {empty && isAuthenticated && (
+                  <button type="button" onClick={openAddDetail} className="text-xs text-primary hover:underline mt-2">
+                    Add this detail
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
+
+      <Dialog open={addDetailOpen} onOpenChange={setAddDetailOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add missing well details</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={saveDetails} className="space-y-4">
+            {emptyFields.map(({ key, label, type }) => (
+              <div key={key} className="space-y-1.5">
+                <Label htmlFor={`detail-${key}`}>{label}</Label>
+                {type === 'status' ? (
+                  <select id={`detail-${key}`} value={detailValues[key] ?? ''} onChange={(event) => setDetailValues((current) => ({ ...current, [key]: event.target.value }))} className="h-8 w-full rounded-lg border border-input bg-card px-2.5 text-sm">
+                    <option value="">Select status</option>
+                    {['active', 'suspended', 'completed', 'abandoned'].map((status) => <option key={status} value={status}>{status}</option>)}
+                  </select>
+                ) : (
+                  <Input id={`detail-${key}`} type={type} value={detailValues[key] ?? ''} onChange={(event) => setDetailValues((current) => ({ ...current, [key]: event.target.value }))} />
+                )}
+              </div>
+            ))}
+            {detailError && <p className="text-sm text-destructive">{detailError}</p>}
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setAddDetailOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={detailSaving}>{detailSaving ? 'Saving…' : 'Save details'}</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Trajectory Strip ────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">

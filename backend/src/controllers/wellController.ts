@@ -47,6 +47,21 @@ export async function updateWell(req: AuthRequest, res: Response, next: NextFunc
   } catch (err) { next(err); }
 }
 
+export async function fillEmptyFields(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const result = await wellService.fillEmptyWellFields(req.params.id, req.user!.id, req.body);
+    sendSuccess(res, result, 'Well details added');
+  } catch (err) { next(err); }
+}
+
+export async function reverseContribution(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const isAdmin = req.user!.role === 'administrator' || req.user!.role === 'admin';
+    const well = await wellService.reverseFieldContribution(req.params.contributionId, req.user!.id, isAdmin);
+    sendSuccess(res, { well }, 'Contribution reversed');
+  } catch (err) { next(err); }
+}
+
 export async function deleteWell(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     await wellService.deleteWell(req.params.id);

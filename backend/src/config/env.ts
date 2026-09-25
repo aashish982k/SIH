@@ -40,6 +40,7 @@ const envSchema = z.object({
 
   // CORS
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
+  NOMINATIM_URL: z.string().url().default('https://nominatim.openstreetmap.org/search'),
 
   // Python remains responsible for OCR and optional reranking; risk prediction
   // is performed by the Node RAG + Grok pipeline.

@@ -8,9 +8,10 @@
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
     "db:setup": "tsx scripts/setupDatabase.ts",
+    "db:push": "drizzle-kit push --config drizzle.config.ts",
     "db:seed": "tsx scripts/runSeeds.ts",
     "qdrant:setup": "tsx scripts/setupQdrant.ts",
-    "setup": "npm run db:setup && npm run qdrant:setup && npm run db:seed",
+    "setup": "npm run db:setup && npm run db:push && npm run qdrant:setup && npm run db:seed",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

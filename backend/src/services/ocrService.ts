@@ -9,7 +9,13 @@ export class OCRService {
     if (ext === '.pdf') {
       try {
         const nativeText = await this.extractNativePdf(filePath);
-        if (nativeText.trim().length >= 50) return { text: nativeText, method: 'native-pdf' };
+        const meaningfulText = nativeText
+          .replace(/--\s*\d+\s+of\s+\d+\s+--/gi, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (meaningfulText.length >= 100 && /[a-z]{3}/i.test(meaningfulText)) {
+          return { text: nativeText, method: 'native-pdf' };
+        }
         console.log(`Native PDF extraction returned insufficient text for ${path.basename(filePath)}; falling back to OCR.`);
       } catch (error) {
         console.warn(`Native PDF extraction failed for ${path.basename(filePath)}; falling back to OCR:`, error);

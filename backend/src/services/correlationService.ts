@@ -34,6 +34,7 @@ export interface CorrelatedWell {
   status: string;
   latitude: number;
   longitude: number;
+  location_precision: 'exact' | 'approximate';
   distance_km: number;
   relevance_score: number;
   evidence: {
@@ -42,6 +43,9 @@ export interface CorrelatedWell {
     event_type_counts: Record<string, number>;
     total_events: number;
     formation_overlap: string[];
+    location_precision: 'exact' | 'approximate';
+    distance_component: number;
+    discounted_distance_component: number;
   };
 }
 
@@ -50,6 +54,7 @@ const W_DISTANCE = 0.25;
 const W_DEPTH = 0.3;
 const W_FORMATION = 0.25;
 const W_EVENT_TYPES = 0.2;
+const APPROXIMATE_RADIUS_BUFFER_KM = 50;
 
 export class CorrelationService {
   /**
@@ -79,11 +84,12 @@ export class CorrelationService {
       longitude: wells.longitude,
       field_name: wells.field_name,
       block: wells.block,
+      location_precision: wells.location_precision,
       distance_km: distanceSql,
     })
       .from(wells)
       .where(sql`${wells.latitude} IS NOT NULL AND ${wells.longitude} IS NOT NULL AND ${wells.id} != ${excludeWellId ?? ''}`)
-      .having(sql`${distanceSql} <= ${radiusKm}`)
+      .having(sql`${distanceSql} <= ${radiusKm} + CASE WHEN ${wells.location_precision} = 'approximate' THEN ${APPROXIMATE_RADIUS_BUFFER_KM} ELSE 0 END`)
       .orderBy(distanceSql)
       .limit(limit * 3);
 
@@ -154,6 +160,9 @@ export class CorrelationService {
 
       // ── Normalized sub-scores [0,1] ────────────────────────────────────────
       const distanceScore = 1 - Number(well.distance_km) / maxDistance;
+      const discountedDistanceScore = well.location_precision === 'approximate'
+        ? distanceScore * 0.5
+        : distanceScore;
 
       const depthScore = currentDepthFt
         ? (depthMatchEvents.length > 0
@@ -168,7 +177,7 @@ export class CorrelationService {
       const eventScore = Math.min(1, wellEvents.length / 5);
 
       const relevanceScore =
-        W_DISTANCE * distanceScore +
+        W_DISTANCE * discountedDistanceScore +
         W_DEPTH * depthScore +
         W_FORMATION * formationScore +
         W_EVENT_TYPES * eventScore;
@@ -181,6 +190,7 @@ export class CorrelationService {
         status: well.status ?? 'unknown',
         latitude: Number(well.latitude),
         longitude: Number(well.longitude),
+        location_precision: well.location_precision,
         distance_km: Number(Number(well.distance_km).toFixed(3)),
         relevance_score: Number(relevanceScore.toFixed(4)),
         evidence: {
@@ -195,6 +205,9 @@ export class CorrelationService {
           event_type_counts: eventTypeCounts,
           total_events: wellEvents.length,
           formation_overlap: formationOverlap,
+          location_precision: well.location_precision,
+          distance_component: Number(distanceScore.toFixed(4)),
+          discounted_distance_component: Number(discountedDistanceScore.toFixed(4)),
         },
       };
     });
@@ -229,11 +242,12 @@ export class CorrelationService {
       status: wells.status,
       latitude: wells.latitude,
       longitude: wells.longitude,
+      location_precision: wells.location_precision,
       distance_km: distanceSql,
     })
       .from(wells)
       .where(sql`${wells.latitude} IS NOT NULL AND ${wells.longitude} IS NOT NULL ${excludeWellId ? sql`AND ${wells.id} != ${excludeWellId}` : sql``}`)
-      .having(sql`${distanceSql} <= ${radiusKm}`)
+      .having(sql`${distanceSql} <= ${radiusKm} + CASE WHEN ${wells.location_precision} = 'approximate' THEN ${APPROXIMATE_RADIUS_BUFFER_KM} ELSE 0 END`)
       .orderBy(distanceSql)
       .limit(limit);
 

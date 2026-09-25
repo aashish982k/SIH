@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import fs from 'fs/promises';
-import { eq, desc, getTableColumns, sql } from 'drizzle-orm';
+import { eq, desc, getTableColumns, sql, and, isNull } from 'drizzle-orm';
 import { db } from '../db';
 import { documents, wells, users } from '../db/schema';
 
@@ -86,4 +86,16 @@ export async function getReportById(id: string, _userId: string): Promise<any | 
     .limit(1);
 
   return doc ?? null;
+}
+
+export async function listUnresolvedDocuments(userId: string, isAdmin: boolean): Promise<any[]> {
+  const ownership = isAdmin ? undefined : eq(documents.uploaded_by, userId);
+  return db.select({
+    ...getTableColumns(documents),
+    uploaded_by_name: users.name,
+  })
+    .from(documents)
+    .leftJoin(users, eq(documents.uploaded_by, users.id))
+    .where(ownership ? and(isNull(documents.well_id), ownership) : isNull(documents.well_id))
+    .orderBy(desc(documents.created_at));
 }

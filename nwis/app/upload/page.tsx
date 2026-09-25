@@ -1,14 +1,93 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, type FormEvent } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn, formatFileSize, formatDate } from '@/lib/utils';
-import { FileText, Upload, CheckCircle, Trash2 } from 'lucide-react';
+import { FileText, Upload, CheckCircle, Trash2, MapPin } from 'lucide-react';
 import type { Report } from '@/lib/types';
 import { Progress } from '@/components/ui/progress';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+
+type UnresolvedDocument = {
+  id: string;
+  file_name: string;
+  document_type: string;
+  created_at: string;
+};
+
+type WellResolutionValues = {
+  name: string;
+  well_number: string;
+  latitude: string;
+  longitude: string;
+};
+
+function ResolutionForm({
+  documentId,
+  onResolved,
+}: {
+  documentId: string;
+  onResolved: () => void;
+}) {
+  const [values, setValues] = useState<WellResolutionValues>({ name: '', well_number: '', latitude: '', longitude: '' });
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError('');
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/documents/${documentId}/resolve-well`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...values,
+          latitude: Number(values.latitude),
+          longitude: Number(values.longitude),
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || payload.error || 'Unable to resolve document');
+      onResolved();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to resolve document');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="mt-3 grid grid-cols-2 gap-2">
+      {([
+        ['name', 'Well name', 'text'],
+        ['well_number', 'Well number', 'text'],
+        ['latitude', 'Latitude', 'number'],
+        ['longitude', 'Longitude', 'number'],
+      ] as const).map(([key, label, type]) => (
+        <div key={key} className="space-y-1">
+          <Label htmlFor={`${documentId}-${key}`} className="text-[10px]">{label}</Label>
+          <Input
+            id={`${documentId}-${key}`}
+            type={type}
+            step={type === 'number' ? 'any' : undefined}
+            value={values[key]}
+            onChange={(event) => setValues((current) => ({ ...current, [key]: event.target.value }))}
+            required
+          />
+        </div>
+      ))}
+      {error && <p className="col-span-2 text-xs text-destructive">{error}</p>}
+      <Button type="submit" size="sm" className="col-span-2" disabled={saving}>
+        {saving ? 'Saving…' : 'Create well and link document'}
+      </Button>
+    </form>
+  );
+}
 
 // ─── Upload Zone ──────────────────────────────────────────────────────────────
 function UploadZone({ onUpload, disabled }: { onUpload: (files: File[]) => void; disabled: boolean }) {
@@ -55,7 +134,10 @@ export default function UploadPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
+  const [resolutionMessage, setResolutionMessage] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [unresolvedDocuments, setUnresolvedDocuments] = useState<UnresolvedDocument[]>([]);
+  const [promptDocumentId, setPromptDocumentId] = useState<string | null>(null);
 
   const mapReport = useCallback((report: any): Report => ({
     id: report.id,
@@ -79,6 +161,12 @@ export default function UploadPage() {
     }
   }, [mapReport]);
 
+  const loadUnresolvedDocuments = useCallback(async () => {
+    const response = await fetch('/api/documents/unresolved', { cache: 'no-store' });
+    const payload = await response.json();
+    if (response.ok) setUnresolvedDocuments(payload.data?.documents ?? []);
+  }, []);
+
   const pollReportStatus = useCallback((reportId: string) => {
     let attempts = 0;
     const timer = window.setInterval(async () => {
@@ -87,6 +175,21 @@ export default function UploadPage() {
         const response = await fetch(`/api/reports/${reportId}/status`, { cache: 'no-store' });
         const payload = await response.json();
         const status = payload.data?.status;
+        if (status === 'processed' || status === 'failed') {
+          const resolution = payload.data?.well_resolution;
+          const name = payload.data?.resolved_well_name;
+          if (resolution === 'created') {
+            setResolutionMessage(`Created new well: ${name}`);
+            window.dispatchEvent(new CustomEvent('nwis:well-created'));
+          } else if (resolution === 'provided') {
+            setResolutionMessage('Linked to existing well selected for this report.');
+            window.dispatchEvent(new Event('nwis:well-created'));
+          } else if (resolution === 'unresolved') {
+            setResolutionMessage('Could not extract well location — report was still added to the knowledge base.');
+            setPromptDocumentId(reportId);
+            void loadUnresolvedDocuments();
+          }
+        }
         if (status) {
           setReports(prev => prev.map(report => report.id === reportId
             ? { ...report, status: status === 'processed' ? 'saved' : status === 'failed' ? 'error' : status }
@@ -99,11 +202,12 @@ export default function UploadPage() {
         if (attempts >= 30) window.clearInterval(timer);
       }
     }, 4000);
-  }, []);
+  }, [loadUnresolvedDocuments]);
 
   useEffect(() => {
     void loadReports();
-  }, [loadReports]);
+    void loadUnresolvedDocuments();
+  }, [loadReports, loadUnresolvedDocuments]);
 
   const handleUpload = useCallback(async (files: File[]) => {
     files.forEach(async (file, i) => {
@@ -173,6 +277,14 @@ export default function UploadPage() {
     setConfirmDeleteId(null);
   }
 
+  function onDocumentResolved(id: string) {
+    setPromptDocumentId((current) => current === id ? null : current);
+    setUnresolvedDocuments((current) => current.filter((document) => document.id !== id));
+    setResolutionMessage('Well created and document linked successfully.');
+    void loadReports();
+    window.dispatchEvent(new CustomEvent('nwis:well-created'));
+  }
+
   return (
     <div className="mx-auto max-w-[1400px] px-4 md:px-6 py-8">
       <motion.div
@@ -197,6 +309,47 @@ export default function UploadPage() {
                   <span>Uploading...</span>
                   <span>{Math.round(progress)}%</span>
                 </div>
+
+                {promptDocumentId && (
+                  <Card className="mt-8 border-primary/30 bg-primary/5">
+                    <CardContent className="p-5">
+                      <div className="flex items-start gap-3">
+                        <MapPin className="w-5 h-5 text-primary mt-0.5" />
+                        <div className="flex-1">
+                          <p className="font-semibold text-sm">We couldn't identify this well's name or location from the document.</p>
+                          <p className="text-xs text-muted-foreground mt-1">Add it now, or skip and add it later.</p>
+                          <ResolutionForm documentId={promptDocumentId} onResolved={() => onDocumentResolved(promptDocumentId)} />
+                          <Button variant="ghost" size="sm" className="mt-2" onClick={() => setPromptDocumentId(null)}>Skip for now</Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                <Card className="mt-8 border-border/60">
+                  <CardContent className="p-5">
+                    <h2 className="font-semibold text-foreground">Unresolved Documents</h2>
+                    <p className="text-xs text-muted-foreground mt-1">Documents without a linked well. Owners and administrators can resolve them later.</p>
+                    {unresolvedDocuments.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-6 text-center">No unresolved documents.</p>
+                    ) : (
+                      <div className="space-y-3 mt-4">
+                        {unresolvedDocuments.map((document) => (
+                          <div key={document.id} className="rounded-lg border border-border/60 p-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="font-medium text-sm truncate">{document.file_name}</p>
+                                <p className="text-xs text-muted-foreground">{document.document_type} · {formatDate(document.created_at)}</p>
+                              </div>
+                              <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
+                            </div>
+                            <ResolutionForm documentId={document.id} onResolved={() => onDocumentResolved(document.id)} />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
                 <Progress value={progress} className="h-2" />
               </CardContent>
             </Card>
@@ -207,6 +360,7 @@ export default function UploadPage() {
             <AnimatePresence>
               {uploadSuccess && (
                 <motion.div
+                  key="upload-status"
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
@@ -222,6 +376,11 @@ export default function UploadPage() {
                     <span className="font-semibold text-sm">{uploadSuccess}</span>
                   </div>
                 </motion.div>
+              )}
+              {resolutionMessage && (
+                <p key="resolution-status" className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm text-primary" aria-live="polite">
+                  {resolutionMessage}
+                </p>
               )}
             </AnimatePresence>
           </div>

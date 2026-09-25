@@ -108,8 +108,12 @@ export function getDistanceKm(
 
 // ─── Date Utilities ───────────────────────────────────────────────────────────
 
-export function timeAgo(isoString: string): string {
-  const diff = Date.now() - new Date(isoString).getTime();
+export function timeAgo(isoString?: string | null): string {
+  if (!isoString) return 'N/A';
+  const date = new Date(isoString);
+  if (isNaN(date.getTime())) return 'N/A';
+  
+  const diff = Date.now() - date.getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return 'just now';
   const rtf = new Intl.RelativeTimeFormat('en-US', { numeric: 'auto' });
@@ -125,6 +129,9 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
   year: 'numeric', month: 'short', day: 'numeric',
 });
 
-export function formatDate(isoString: string): string {
-  return dateFormatter.format(new Date(isoString));
+export function formatDate(isoString?: string | null): string {
+  if (!isoString) return 'N/A';
+  const date = new Date(isoString);
+  if (isNaN(date.getTime())) return 'N/A';
+  return dateFormatter.format(date);
 }

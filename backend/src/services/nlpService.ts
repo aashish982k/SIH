@@ -4,6 +4,15 @@ export interface ExtractedEntity {
   context?: string;
 }
 
+export interface ExtractedWellIdentity {
+  wellName: string | null;
+  fieldName: string | null;
+  block: string | null;
+  locationText: string | null;
+  latitude: number | null;
+  longitude: number | null;
+}
+
 export class NLPService {
   private readonly EVENT_TYPES = ['mud loss', 'kick', 'stuck pipe', 'overpressure', 'torque spike', 'cementing issue'];
   private readonly SEVERITY_LEVELS = ['low', 'medium', 'high', 'severe', 'critical'];
@@ -35,6 +44,7 @@ export class NLPService {
           value: event,
         });
       }
+
     }
 
     // 3. Extract Severity
@@ -91,6 +101,59 @@ export class NLPService {
     }
 
     return entities;
+  }
+
+  public extractWellIdentity(text: string): ExtractedWellIdentity {
+    const normalizedText = text
+      .replace(/[º˚]/g, '°')
+      .replace(/[“”″]/g, '"')
+      .replace(/[‘’′]/g, "'");
+    const labeledValue = (label: string): string | null => {
+      const match = normalizedText.match(new RegExp(`^\\s*${label}\\s*(?::|=|-)?\\s*([^\\r\\n]+)`, 'im'));
+      return match?.[1]?.trim() || null;
+    };
+    const parseCoordinate = (label: 'Latitude' | 'Longitude'): number | null => {
+      const labelPattern = new RegExp(
+        `${label}\\s*(?::|=|-)?\\s*` +
+        `([+-]?\\d{1,3}(?:\\.\\d+)?)\\s*(?:°|deg)?\\s*` +
+        `(?:(\\d{1,2})\\s*(?:'|m)?\\s*)?` +
+        `(?:(\\d{1,2}(?:\\.\\d+)?)\\s*(?:"|s)?\\s*)?` +
+        `(["']?)([NSEW])\\b`,
+        'i',
+      );
+      const dmsMatch = normalizedText.match(labelPattern);
+      if (dmsMatch) {
+        const degrees = Number(dmsMatch[1]);
+        const minutes = Number(dmsMatch[2] ?? 0);
+        const seconds = Number(dmsMatch[3] ?? 0);
+        const hemisphere = dmsMatch[5].toUpperCase();
+        const absolute = Math.abs(degrees) + minutes / 60 + seconds / 3600;
+        const signed = ['S', 'W'].includes(hemisphere) ? -absolute : absolute;
+        return Number.isFinite(signed) ? signed : null;
+      }
+
+      const valueMatch = normalizedText.match(new RegExp(
+        `${label}\\s*(?::|=|-)?\\s*([+-]?\\d{1,3}(?:\\.\\d+)?)`, 'i',
+      ));
+      const number = valueMatch ? Number(valueMatch[1]) : null;
+      return number != null && Number.isFinite(number) ? number : null;
+    };
+
+    const wellName = labeledValue('Well\\s*(?:Name|No\\.?|Number)?')?.replace(/\s{2,}/g, ' ') || null;
+    const fieldName = labeledValue('Field(?:\\s*Name)?') || null;
+    const block = labeledValue('Block') || null;
+    const locationText = labeledValue('(?:Location|Basin|Field(?:\\s*Name)?|Block)') || null;
+    const latitude = parseCoordinate('Latitude');
+    const longitude = parseCoordinate('Longitude');
+
+    return {
+      wellName,
+      fieldName,
+      block,
+      locationText,
+      latitude: latitude != null && latitude >= -90 && latitude <= 90 ? latitude : null,
+      longitude: longitude != null && longitude >= -180 && longitude <= 180 ? longitude : null,
+    };
   }
 }
 

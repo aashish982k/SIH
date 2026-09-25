@@ -11,5 +11,6 @@ router.get('/',        authenticate, reportController.listReports);
 router.get('/stats/global', authenticate, reportController.getGlobalReportStats);
 router.get('/:id/status', authenticate, reportController.getReportStatus);
 router.get('/:id',     authenticate, reportController.getReport);
+router.post('/:id/resolve-well', authenticate, reportController.resolveWell);
 
 export default router;
