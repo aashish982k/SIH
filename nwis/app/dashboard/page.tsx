@@ -2,12 +2,11 @@
 
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '@/store/appStore';
 import { MOCK_WELLS } from '@/lib/mock/wells';
 import { getIncidentsForWell } from '@/lib/mock/incidents';
-import { cn, getRiskBgClass, getRiskLabel, formatDepth, timeAgo, getIncidentLabel } from '@/lib/utils';
+import { cn, getRiskBgClass, getRiskLabel, formatDepth, timeAgo } from '@/lib/utils';
 import { fadeUp, stagger } from '@/lib/motion';
 import { HeadlineReveal } from '@/components/motion/HeadlineReveal';
 import { AnimatedStat } from '@/components/motion/AnimatedStat';
@@ -15,9 +14,8 @@ import { DrillingParamsGrid } from '@/components/wells/DrillingParamsGrid';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import {
-  Activity, AlertTriangle, Map, BookOpen, ArrowRight,
-  TrendingUp, Layers, Gauge, ChevronRight, Clock, Wifi
+import { Activity, AlertTriangle, Map, BookOpen, ArrowRight,
+  ChevronRight, Layers
 } from 'lucide-react';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
@@ -33,7 +31,10 @@ function RiskGaugeSmall({ score, level }: { score: number; level: RiskLevel }) {
   const [offset, setOffset] = useState(circumference);
   useEffect(() => {
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduced) { setOffset(circumference - (score / 100) * circumference); return; }
+    if (reduced) { 
+      const t = setTimeout(() => setOffset(circumference - (score / 100) * circumference), 0);
+      return () => clearTimeout(t);
+    }
     const timer = setTimeout(() => {
       setOffset(circumference - (score / 100) * circumference);
     }, 300);
@@ -176,7 +177,6 @@ function QuickLink({ href, icon: Icon, label, description, color }: {
 
 // ─── Dashboard Page ───────────────────────────────────────────────────────────
 export default function DashboardPage() {
-  const router = useRouter();
   const {
     activeWell, liveDepthFt, liveRiskScore, liveRiskLevel,
     alerts, unreadAlertCount, isRTMACConnected, liveRtmacData

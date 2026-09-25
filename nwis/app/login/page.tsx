@@ -18,12 +18,22 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Droplets, Lock, AlertTriangle, Eye, EyeOff } from "lucide-react";
 
 const schema = z.object({
-  email: z.string().email("Enter a valid email").optional(),
-  username: z.string().min(1, "Username is required").optional(),
+  email: z.string().email("Enter a valid email").or(z.literal("")).optional(),
+  username: z.string().min(1, "Username is required").or(z.literal("")).optional(),
   password: z.string().min(1, "Password is required"),
-}).refine((value) => Boolean(value.email || value.username), {
-  message: "Email or username is required",
-  path: ["email"],
+}).superRefine((val, ctx) => {
+  if (!val.email && !val.username) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Email is required",
+      path: ["email"],
+    });
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Username is required",
+      path: ["username"],
+    });
+  }
 });
 type FormData = z.infer<typeof schema>;
 

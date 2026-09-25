@@ -17,6 +17,7 @@ export function AnimationProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // Check session storage
     const played = sessionStorage.getItem('nwis_hero_played') === 'true';
+    // eslint-disable-next-line
     setHasPlayedHeroState(played);
 
     // Check reduced motion

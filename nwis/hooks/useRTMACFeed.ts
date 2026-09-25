@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { createTransport, type RTMACTransport } from '@/lib/rtmac/transport';
+import type { Alert } from '@/lib/types';
 import { useAppStore } from '@/store/appStore';
 
 /**
@@ -31,7 +32,7 @@ export function useRTMACFeed() {
       (alertData) => {
         // Map backend alert to frontend Alert type if necessary, or just add
         addAlert({
-          ...alertData,
+          ...(alertData as Alert),
           status: 'new'
         });
       },

@@ -2,13 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import {
   LayoutDashboard, Map, BookOpen, AlertTriangle, Settings,
-  Bell, ChevronDown, Menu, X, Wifi, WifiOff, Droplets,
+  Bell, ChevronDown, Menu, X, Wifi, WifiOff,
   Activity, LogIn, LogOut, Upload
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Separator } from '@/components/ui/separator';
 import { useAppStore } from '@/store/appStore';
-import { cn, getRiskColor, getRiskLabel, formatDepth } from '@/lib/utils';
+import { cn, getRiskLabel, formatDepth } from '@/lib/utils';
 import { DecodeText } from '@/components/motion/DecodeText';
 import { MOCK_WELLS } from '@/lib/mock/wells';
 import type { Alert } from '@/lib/types';
@@ -81,7 +81,7 @@ export default function Navbar() {
   const headerRef = useRef<HTMLElement>(null);
 
   const {
-    activeWell, liveDepthFt, liveRiskScore, liveRiskLevel,
+    activeWell, liveDepthFt, liveRiskLevel,
     unreadAlertCount, alerts, isRTMACConnected, isAdmin, user,
     markAllRead, setActiveWell, logout
   } = useAppStore();

@@ -2,14 +2,23 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 /**
- * Middleware — protects /admin routes.
- * Checks localStorage isn't available in middleware (Edge runtime),
- * so we use a cookie `nwis_role=admin` set on login.
- * The client also sets localStorage for Zustand hydration.
+ * Middleware — protects all routes except public landing and auth pages.
+ * Also enforces role-based access for /admin routes.
  */
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  const isPublicPath = pathname === '/' || pathname === '/login' || pathname === '/signup';
+  const token = request.cookies.get('nwis_token')?.value;
+
+  // Protect all non-public routes
+  if (!token && !isPublicPath) {
+    const loginUrl = new URL('/login', request.url);
+    loginUrl.searchParams.set('from', pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  // Admin route protection
   if (pathname.startsWith('/admin')) {
     const role = request.cookies.get('nwis_role')?.value;
     if (role !== 'admin') {
@@ -23,5 +32,6 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*'],
+  // Apply middleware to all routes except Next.js internals and static assets
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
 };

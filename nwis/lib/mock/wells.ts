@@ -1,16 +1,5 @@
 import type { Well, Formation, CasingSection } from '@/lib/types';
 
-// ─── Formation Palettes ────────────────────────────────────────────────────────
-const FORMATION_COLORS: Record<string, string> = {
-  sandstone: '#C8A96E',
-  shale: '#6B7B8D',
-  limestone: '#A8C5A0',
-  coal: '#3D3D3D',
-  anhydrite: '#E8D5B7',
-  mudstone: '#8B9BAD',
-  siltstone: '#B5A080',
-  conglomerate: '#D4956A',
-};
 
 // ─── Casing templates ─────────────────────────────────────────────────────────
 const standardCasing = (): CasingSection[] => [
@@ -22,13 +11,13 @@ const standardCasing = (): CasingSection[] => [
 
 // ─── Formation Sequences ──────────────────────────────────────────────────────
 const upperAssamFormations = (startDepth = 0): Formation[] => [
-  { id: 'f1', name: 'Alluvium', depthTopFt: startDepth, depthBaseFt: startDepth + 600, lithology: 'sandstone', color: FORMATION_COLORS.sandstone, porosity: 28, fluidType: 'water' },
-  { id: 'f2', name: 'Tipam Sandstone', depthTopFt: startDepth + 600, depthBaseFt: startDepth + 2400, lithology: 'sandstone', color: '#D4A76A', porosity: 22, fluidType: 'oil' },
-  { id: 'f3', name: 'Girujan Clay', depthTopFt: startDepth + 2400, depthBaseFt: startDepth + 3800, lithology: 'shale', color: FORMATION_COLORS.shale, porosity: 8 },
-  { id: 'f4', name: 'Barail Sandstone', depthTopFt: startDepth + 3800, depthBaseFt: startDepth + 6200, lithology: 'sandstone', color: '#C8A050', porosity: 18, fluidType: 'gas' },
-  { id: 'f5', name: 'Kopili Shale', depthTopFt: startDepth + 6200, depthBaseFt: startDepth + 7800, lithology: 'shale', color: '#5A6B7A', porosity: 6 },
-  { id: 'f6', name: 'Sylhet Limestone', depthTopFt: startDepth + 7800, depthBaseFt: startDepth + 9400, lithology: 'limestone', color: FORMATION_COLORS.limestone, porosity: 12, fluidType: 'oil' },
-  { id: 'f7', name: 'Langpar Formation', depthTopFt: startDepth + 9400, depthBaseFt: startDepth + 11200, lithology: 'shale', color: '#4A5568', porosity: 4 },
+  { id: 'f1', name: 'Alluvium', depthTopFt: startDepth, depthBaseFt: startDepth + 600, lithology: 'sandstone', color: 'var(--strata-alluvium)', porosity: 28, fluidType: 'water' },
+  { id: 'f2', name: 'Tipam Sandstone', depthTopFt: startDepth + 600, depthBaseFt: startDepth + 2400, lithology: 'sandstone', color: 'var(--strata-tipam)', porosity: 22, fluidType: 'oil' },
+  { id: 'f3', name: 'Girujan Clay', depthTopFt: startDepth + 2400, depthBaseFt: startDepth + 3800, lithology: 'shale', color: 'var(--strata-girujan)', porosity: 8 },
+  { id: 'f4', name: 'Barail Sandstone', depthTopFt: startDepth + 3800, depthBaseFt: startDepth + 6200, lithology: 'sandstone', color: 'var(--strata-barail)', porosity: 18, fluidType: 'gas' },
+  { id: 'f5', name: 'Kopili Shale', depthTopFt: startDepth + 6200, depthBaseFt: startDepth + 7800, lithology: 'shale', color: 'var(--strata-disang)', porosity: 6 },
+  { id: 'f6', name: 'Sylhet Limestone', depthTopFt: startDepth + 7800, depthBaseFt: startDepth + 9400, lithology: 'limestone', color: 'var(--strata-basement)', porosity: 12, fluidType: 'oil' },
+  { id: 'f7', name: 'Langpar Formation', depthTopFt: startDepth + 9400, depthBaseFt: startDepth + 11200, lithology: 'shale', color: 'var(--strata-basement)', porosity: 4 },
 ];
 
 // ─── Mock Wells ───────────────────────────────────────────────────────────────

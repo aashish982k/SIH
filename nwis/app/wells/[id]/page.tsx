@@ -11,13 +11,12 @@ import { cn, getRiskBgClass, getRiskLabel, getRiskBorderClass, getIncidentLabel,
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-  ArrowLeft, MapPin, Calendar, Layers, AlertTriangle,
-  FileText, GitCompare, ChevronRight, Clock, Ruler, Zap, Plus
+  FileText, GitCompare, Ruler, Zap, Plus,
+  ArrowLeft, MapPin, Calendar, Layers, AlertTriangle
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -191,8 +190,6 @@ export default function WellDetailPage({ params }: { params: Promise<{ id: strin
   const { id } = use(params);
   const router = useRouter();
   const { activeWell } = useAppStore();
-  const [activeSection, setActiveSection] = useState('overview');
-
   const [well, setWell] = useState<typeof MOCK_WELLS[number] | null>(null);
   const [rawWell, setRawWell] = useState<Record<string, unknown> | null>(null);
   const [contributions, setContributions] = useState<Array<Record<string, unknown>>>([]);
@@ -229,6 +226,7 @@ export default function WellDetailPage({ params }: { params: Promise<{ id: strin
 
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line
     setIsAuthenticated(Boolean(localStorage.getItem('nwis_token')));
     loadWell()
       .catch(() => { if (!cancelled) setWell(null); })
@@ -486,7 +484,7 @@ export default function WellDetailPage({ params }: { params: Promise<{ id: strin
                     {well.casingProgram.map(c => (
                       <tr key={c.id} className="hover:bg-muted/30 transition-colors">
                         <td className="py-2.5 px-3 font-medium text-foreground">{c.name}</td>
-                        <td className="py-2.5 px-3 font-mono text-muted-foreground">{c.sizeinches}"</td>
+                        <td className="py-2.5 px-3 font-mono text-muted-foreground">{c.sizeinches}&quot;</td>
                         <td className="py-2.5 px-3 font-mono text-foreground">{formatDepth(c.setDepthFt)} ft</td>
                         <td className="py-2.5 px-3 font-mono text-muted-foreground">{formatDepth(c.cementTopFt)} ft</td>
                         <td className="py-2.5 px-3 font-mono text-muted-foreground">{formatDepth(c.cementBottomFt)} ft</td>

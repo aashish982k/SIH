@@ -1,21 +1,20 @@
 'use client';
 
-import { Suspense, use, useState, useMemo } from 'react';
+import { Suspense, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+
 import { MOCK_WELLS } from '@/lib/mock/wells';
 import { getIncidentsForWell } from '@/lib/mock/incidents';
-import { cn, getRiskBgClass, getRiskLabel, getIncidentLabel, getIncidentColor, formatDepth, formatDate } from '@/lib/utils';
-import { Badge } from '@/components/ui/badge';
+import { cn, getRiskBgClass, getIncidentLabel, getIncidentColor, formatDepth, formatDate } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
+
 import { ArrowLeft, GitCompare, AlertTriangle, Layers } from 'lucide-react';
 import type { Well } from '@/lib/types';
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend, CartesianGrid
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid
 } from 'recharts';
 
 // ─── Compare Panel ─────────────────────────────────────────────────────────────

@@ -12,15 +12,15 @@ mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? '';
 // ─── Popup theme — dark graphite, hex mirrors of globals.css tokens ──────────
 // (Mapbox popups render outside React; inline styles need concrete values.)
 const POPUP_COLORS = {
-  text: '#FAFAFA',
-  muted: '#A1A1AA',
-  bg: '#18181B',
-  high: '#D9534F',
-  medium: '#E0A93B',
-  ok: '#27272A',
-  accent: '#FCF1D0',
-  accentHover: '#F5E6B8',
-  accentText: '#09090B',
+  text: '#E2E8F0',
+  muted: '#7E8B9B',
+  bg: '#0D1219',
+  high: '#EF4444',
+  medium: '#F59E0B',
+  ok: '#10B981',
+  accent: '#F59E0B',
+  accentHover: '#D97706',
+  accentText: '#070A0E',
 };
 
 // ─── Marker Color by risk/incident history ────────────────────────────────────
@@ -93,50 +93,21 @@ function createPopupHTML(well: Well, distance?: number, reportCount = 0): string
   `;
 }
 
-// ─── Active well pulse marker ─────────────────────────────────────────────────
-function createActivePulseEl(): HTMLElement {
-  const el = document.createElement('div');
-  el.style.cssText = 'width: 20px; height: 20px; position: relative;';
-  el.innerHTML = `
-    <style>
-      @keyframes nwis-pulse {
-        0% { transform: scale(1); opacity: 0.8; }
-        100% { transform: scale(2.8); opacity: 0; }
-      }
-      @media (prefers-reduced-motion: reduce) {
-        .nwis-pulse-ring { animation: none !important; opacity: 0; }
-      }
-    </style>
-    <div style="
-      width:20px; height:20px; border-radius:50%; background:${POPUP_COLORS.accent};
-      border: 3px solid white; box-shadow: 0 2px 8px rgba(200,245,66,0.4);
-      position: relative; z-index:2;
-    "></div>
-    <div class="nwis-pulse-ring" style="
-      position:absolute; top:0; left:0; width:20px; height:20px;
-      border-radius:50%; background:${POPUP_COLORS.accent}; opacity:0.6;
-      animation: nwis-pulse 2s cubic-bezier(0.4,0,0.6,1) infinite;
-    "></div>
-  `;
-  return el;
-}
+
 
 // ─── WellMap Component ────────────────────────────────────────────────────────
 interface WellMapProps {
-  activeWell: Well;
   mapCenter: { lat: number; lng: number };
   nearbyWells: (Well & { distance: number; reportCount?: number })[];
   radius: number;
   selectedWellId: string | null;
   onWellClick: (wellId: string) => void;
   onViewDetails: (wellId: string) => void;
-  liveDepthFt: number;
-  activeReportCount?: number;
   onMapClick?: (coordinates: { lat: number; lng: number }) => void;
 }
 
 export default function WellMap({
-  activeWell, mapCenter, nearbyWells, radius, selectedWellId, onWellClick, onViewDetails, liveDepthFt, activeReportCount = 0, onMapClick
+  mapCenter, nearbyWells, radius, selectedWellId, onWellClick, onViewDetails, onMapClick
 }: WellMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -242,7 +213,20 @@ export default function WellMap({
 
     nearbyWells.forEach(well => {
       existingIds.delete(well.id);
-      if (markersRef.current.has(well.id)) return; // already rendered
+
+      const isApproximate = well.locationPrecision === 'approximate';
+      const inRadius = well.distance <= radius + (isApproximate ? 50 : 0);
+      const targetOpacity = !inRadius ? '0.7' : '1';
+      const targetFilter = 'none';
+
+      if (markersRef.current.has(well.id)) {
+        // already rendered, update its styles
+        const marker = markersRef.current.get(well.id)!;
+        const el = marker.getElement();
+        el.style.opacity = targetOpacity;
+        el.style.filter = targetFilter;
+        return;
+      }
 
       const color = getMarkerColor(well);
       const el = document.createElement('div');
@@ -250,9 +234,10 @@ export default function WellMap({
         width:16px; height:16px; border-radius:50%;
         background:${color}; border:2.5px solid white;
         box-shadow: 0 2px 6px ${color}66;
-        opacity:${well.locationPrecision === 'approximate' ? '0.5' : '1'};
-        ${well.locationPrecision === 'approximate' ? 'outline:2px dashed #F59E0B; outline-offset:2px;' : ''}
-        cursor:pointer; transition: transform 0.15s;
+        opacity:${targetOpacity};
+        filter:${targetFilter};
+        ${isApproximate ? 'outline:2px dashed #F59E0B; outline-offset:2px;' : ''}
+        cursor:pointer; transition: transform 0.15s, opacity 0.3s, filter 0.3s;
       `;
       el.addEventListener('mouseenter', () => { el.style.transform = 'scale(1.3)'; });
       el.addEventListener('mouseleave', () => { el.style.transform = 'scale(1)'; });
@@ -274,7 +259,7 @@ export default function WellMap({
       markersRef.current.get(id)?.remove();
       markersRef.current.delete(id);
     });
-  }, [nearbyWells, onWellClick, onViewDetails]);
+  }, [nearbyWells, radius, onWellClick, onViewDetails]);
 
   // Fly to selected well
   useEffect(() => {

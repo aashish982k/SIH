@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import { useAppStore } from '@/store/appStore';
@@ -15,30 +15,20 @@ import { Separator } from '@/components/ui/separator';
 import { HeadlineReveal } from '@/components/motion/HeadlineReveal';
 import { AnimatedStat } from '@/components/motion/AnimatedStat';
 import {
-  AlertTriangle, Activity, Map, ChevronDown, ChevronRight,
+  AlertTriangle, Activity, Map,
   Clock, Zap, CheckCircle, Eye
 } from 'lucide-react';
-import type { Alert, RiskLevel } from '@/lib/types';
+import type { Alert, RiskLevel, ThreatMatrixEntry } from '@/lib/types';
 
 // ─── Animated SVG Arc Gauge ───────────────────────────────────────────────────
 function RiskGauge({ score, level }: { score: number; level: RiskLevel }) {
   const r = 72;
   const cx = 90;
   const cy = 90;
-  const startAngle = -210;
-  const endAngle = 30;
+  const startAngle = -120;
+  const endAngle = 120;
   const totalAngle = endAngle - startAngle;
-  const circumference = (2 * Math.PI * r * totalAngle) / 360;
-  const filled = (score / 100) * circumference;
-  const dashArray = `${circumference}`;
-  const [animatedFill, setAnimatedFill] = useState(0);
-
   const color = getRiskColor(level);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setAnimatedFill(filled), 200);
-    return () => clearTimeout(timer);
-  }, [filled]);
 
   function polarToXY(angleDeg: number) {
     const rad = ((angleDeg - 90) * Math.PI) / 180;
@@ -240,11 +230,11 @@ function AlertCard({ alert, isNew }: { alert: Alert; isNew: boolean }) {
 
 // ─── Risk & Alerts Page ───────────────────────────────────────────────────────
 export default function RiskPage() {
-  const { liveDepthFt, liveRiskScore, liveRiskLevel, alerts, liveRtmacData, acknowledgeAlert, activeWellId } = useAppStore();
+  const { liveDepthFt, liveRiskScore, liveRiskLevel, alerts, liveRtmacData, activeWellId } = useAppStore();
   const newAlerts = alerts.filter(a => a.status === 'new');
   const acknowledgedAlerts = alerts.filter(a => a.status === 'acknowledged');
 
-  const [threatMatrix, setThreatMatrix] = useState<any[]>(MOCK_THREAT_MATRIX);
+  const [threatMatrix, setThreatMatrix] = useState<ThreatMatrixEntry[]>(MOCK_THREAT_MATRIX);
 
   useEffect(() => {
     if (!activeWellId) return;
@@ -252,6 +242,7 @@ export default function RiskPage() {
       .then(res => res.json())
       .then(data => {
         if (data.data?.risks) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const mapped = data.data.risks.map((r: any) => {
             const probFloat = parseFloat(r.probability);
             const probLevel = probFloat >= 0.8 ? 'critical' : probFloat >= 0.6 ? 'high' : probFloat >= 0.3 ? 'medium' : 'low';
@@ -377,7 +368,7 @@ export default function RiskPage() {
                       <td className="py-3 pl-5 pr-3">
                         <p className="font-medium text-foreground text-[11px]">{row.riskFactor}</p>
                         <p className="text-muted-foreground text-[10px] line-clamp-1 mt-0.5">{row.description}</p>
-                        {(row.reasoning || row.recommendation || row.evidence?.length > 0) && (
+                        {(row.reasoning || row.recommendation || (row.evidence?.length ?? 0) > 0) && (
                           <Accordion className="mt-1">
                             <AccordionItem value={`risk-${i}`} className="border-none">
                               <AccordionTrigger className="py-0 text-[10px] text-primary hover:no-underline">
@@ -386,6 +377,7 @@ export default function RiskPage() {
                               <AccordionContent className="pt-1 text-[10px] text-muted-foreground space-y-1">
                                 {row.reasoning && <p><span className="font-semibold text-foreground">Reasoning:</span> {row.reasoning}</p>}
                                 {row.recommendation && <p><span className="font-semibold text-foreground">Recommendation:</span> {row.recommendation}</p>}
+                                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                                 {row.evidence?.slice(0, 3).map((item: any, evidenceIndex: number) => (
                                   <p key={evidenceIndex} className="border-l-2 border-primary/30 pl-2">
                                     “{item.text || item.chunk_text}”

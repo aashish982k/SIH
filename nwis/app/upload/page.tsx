@@ -139,6 +139,7 @@ export default function UploadPage() {
   const [unresolvedDocuments, setUnresolvedDocuments] = useState<UnresolvedDocument[]>([]);
   const [promptDocumentId, setPromptDocumentId] = useState<string | null>(null);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapReport = useCallback((report: any): Report => ({
     id: report.id,
     title: report.file_name?.replace(/\.[^.]+$/, '') ?? 'Untitled report',
@@ -205,6 +206,7 @@ export default function UploadPage() {
   }, [loadUnresolvedDocuments]);
 
   useEffect(() => {
+    // eslint-disable-next-line
     void loadReports();
     void loadUnresolvedDocuments();
   }, [loadReports, loadUnresolvedDocuments]);
@@ -259,14 +261,14 @@ export default function UploadPage() {
 
         setUploadSuccess('Report uploaded successfully.');
         setTimeout(() => setUploadSuccess(null), 5000);
-      } catch (e: any) {
+      } catch (e: unknown) {
         clearInterval(interval);
         setUploadProgress(prev => {
           const next = { ...prev };
           delete next[fileId];
           return next;
         });
-        setUploadSuccess(e.message || 'Upload failed. Check your connection and try again.');
+        setUploadSuccess(e instanceof Error ? e.message : 'Upload failed. Check your connection and try again.');
         setTimeout(() => setUploadSuccess(null), 5000);
       }
     });
@@ -316,7 +318,7 @@ export default function UploadPage() {
                       <div className="flex items-start gap-3">
                         <MapPin className="w-5 h-5 text-primary mt-0.5" />
                         <div className="flex-1">
-                          <p className="font-semibold text-sm">We couldn't identify this well's name or location from the document.</p>
+                          <p className="font-semibold text-sm">We couldn&apos;t identify this well&apos;s name or location from the document.</p>
                           <p className="text-xs text-muted-foreground mt-1">Add it now, or skip and add it later.</p>
                           <ResolutionForm documentId={promptDocumentId} onResolved={() => onDocumentResolved(promptDocumentId)} />
                           <Button variant="ghost" size="sm" className="mt-2" onClick={() => setPromptDocumentId(null)}>Skip for now</Button>

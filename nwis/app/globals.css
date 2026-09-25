@@ -8,76 +8,83 @@
 :root {
   color-scheme: dark;
 
-  /* Surfaces - Neutral Dark (Zinc) instead of Navy */
-  --nwis-deep-navy: #09090B; /* Zinc 950 */
-  --nwis-navy: #18181B; /* Zinc 900 */
-  --nwis-slate-blue: #27272A; /* Zinc 800 */
-  --nwis-cream: #FCF1D0; /* Keeping cream as accent */
-
-  --bg-surface-raised: #27272A; /* Zinc 800 */
+  /* Surfaces - Mapped to reference theme */
+  --nwis-deep-navy: #070A0E;
+  --nwis-navy: #0C1017;
+  --nwis-slate-blue: #0E7490;
+  --nwis-cream: #F59E0B;
+  --bg-surface-raised: #141C24;
 
   --background:           var(--nwis-deep-navy);
-  --foreground:           #FAFAFA; /* Zinc 50 */
+  --foreground:           #E2E8F0;
 
   --card:                 var(--nwis-navy);
-  --card-foreground:      #FAFAFA;
-  --popover:              var(--nwis-navy);
-  --popover-foreground:   #FAFAFA;
+  --card-foreground:      #F1F5F9;
+  --popover:              #0D1219;
+  --popover-foreground:   #F1F5F9;
 
-  /* Primary: Cream */
+  /* Primary */
   --primary:              var(--nwis-cream);
-  --primary-foreground:   #09090B;
+  --primary-foreground:   #070A0E;
 
-  /* Secondary: Neutral Gray */
+  /* Secondary */
   --secondary:            var(--nwis-slate-blue);
   --secondary-foreground: #FFFFFF;
 
   --muted:                var(--bg-surface-raised);
-  --muted-foreground:     #A1A1AA; /* Zinc 400 */
+  --muted-foreground:     #7E8B9B;
   
-  --accent:               var(--nwis-slate-blue);
-  --accent-foreground:    #FFFFFF;
+  --accent:               #1A2432;
+  --accent-foreground:    var(--nwis-cream);
   
-  --destructive:          #D9534F;
+  --destructive:          #EF4444;
   --destructive-foreground: #FFFFFF;
 
   /* Borders */
-  --border:               rgba(255, 255, 255, 0.08);
-  --input:                var(--bg-surface-raised);
+  --border:               #1B2533;
+  --input:                #141C26;
   --ring:                 var(--nwis-cream);
 
   /* Border radii */
-  --radius: 12px;
+  --radius: 0.625rem;
 
-  /* Risk severity — Restrained Semantics */
-  --risk-info:            var(--nwis-slate-blue);
-  --risk-low:             var(--nwis-slate-blue);
-  --risk-medium:          #E0A93B;   /* Muted Amber */
-  --risk-high:            #D9534F;   /* Muted Red */
-  --risk-critical:        #D9534F;   /* Muted Red */
+  /* Risk severity — Reference mapping */
+  --risk-info:            #06B6D4;
+  --risk-low:             #10B981;
+  --risk-medium:          #F59E0B;
+  --risk-high:            #EF4444;
+  --risk-critical:        #A855F7;
 
-  /* Chart palette - Grays + Cream derivatives */
-  --chart-1: var(--nwis-slate-blue);
-  --chart-2: var(--nwis-cream);
-  --chart-3: #52525B; /* Zinc 600 */
-  --chart-4: #A1A1AA; /* Zinc 400 */
-  --chart-5: #3F3F46; /* Zinc 700 */
+  /* Chart palette - Reference palette */
+  --chart-1: #F59E0B;
+  --chart-2: #10B981;
+  --chart-3: #06B6D4;
+  --chart-4: #EF4444;
+  --chart-5: #A855F7;
 
   /* Sidebar */
-  --sidebar:                    var(--nwis-deep-navy);
-  --sidebar-foreground:         #FAFAFA;
-  --sidebar-primary:            var(--nwis-cream);
-  --sidebar-primary-foreground: #09090B;
-  --sidebar-accent:             var(--nwis-slate-blue);
-  --sidebar-accent-foreground:  #FFFFFF;
-  --sidebar-border:             rgba(255, 255, 255, 0.08);
-  --sidebar-ring:               var(--nwis-cream);
+  --sidebar:                    #080C11;
+  --sidebar-foreground:         #E2E8F0;
+  --sidebar-primary:            #F59E0B;
+  --sidebar-primary-foreground: #070A0E;
+  --sidebar-accent:             #121922;
+  --sidebar-accent-foreground:  #F59E0B;
+  --sidebar-border:             #18202B;
+  --sidebar-ring:               #F59E0B;
 
   /* Map marker palette */
   --map-active:           var(--nwis-cream);
-  --map-high:             #D9534F;
-  --map-medium:           #E0A93B;
-  --map-low:              var(--nwis-slate-blue);
+  --map-high:             var(--risk-high);
+  --map-medium:           var(--risk-medium);
+  --map-low:              var(--risk-low);
+
+  /* Geological strata colors */
+  --strata-alluvium:      #334139;
+  --strata-tipam:         #7C5E3A;
+  --strata-girujan:       #475569;
+  --strata-barail:        #8C733E;
+  --strata-disang:        #3B4252;
+  --strata-basement:      #1F2430;
 }
 
 @theme inline {
@@ -127,11 +134,19 @@
   --color-risk-high:     var(--risk-high);
   --color-risk-critical: var(--risk-critical);
 
-  --radius-sm:  8px;
-  --radius-md:  12px;
-  --radius-lg:  16px;
-  --radius-xl:  20px;
-  --radius-2xl: 24px;
+  /* Strata colors */
+  --color-strata-alluvium: var(--strata-alluvium);
+  --color-strata-tipam: var(--strata-tipam);
+  --color-strata-girujan: var(--strata-girujan);
+  --color-strata-barail: var(--strata-barail);
+  --color-strata-disang: var(--strata-disang);
+  --color-strata-basement: var(--strata-basement);
+
+  --radius-sm:  calc(var(--radius) * 0.5);
+  --radius-md:  calc(var(--radius) * 0.7);
+  --radius-lg:  var(--radius);
+  --radius-xl:  calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
 
   /* Fonts */
   --font-sans: var(--font-inter), 'Inter', sans-serif;

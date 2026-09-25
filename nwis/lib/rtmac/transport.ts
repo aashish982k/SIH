@@ -12,7 +12,7 @@ export interface RTMACTransport {
   /** Start receiving data. Calls onData with each update, onError on failure. */
   connect(
     onData: (data: RTMACData) => void,
-    onAlert: (alert: any) => void,
+    onAlert: (alert: unknown) => void,
     onError?: (err: Error) => void
   ): void;
   /** Stop receiving data and clean up resources. */
@@ -45,9 +45,7 @@ export class PollingTransport implements RTMACTransport {
   private ropTrend = 1; // direction of ROP drift
 
   connect(
-    onData: (data: RTMACData) => void,
-    onAlert: (alert: any) => void,
-    _onError?: (err: Error) => void
+    onData: (data: RTMACData) => void
   ): void {
     if (this.intervalId) return; // already connected
 
@@ -108,7 +106,7 @@ export class SocketIOTransport implements RTMACTransport {
 
   connect(
     onData: (data: RTMACData) => void,
-    onAlert: (alert: any) => void,
+    onAlert: (alert: unknown) => void,
     onError?: (err: Error) => void
   ): void {
     this.socket = io(this.url, {
@@ -123,7 +121,7 @@ export class SocketIOTransport implements RTMACTransport {
       onData(data);
     });
 
-    this.socket.on('alert:new', (alertData: any) => {
+    this.socket.on('alert:new', (alertData: unknown) => {
       onAlert(alertData);
     });
 
@@ -157,7 +155,7 @@ export class SSETransport implements RTMACTransport {
 
   connect(
     onData: (data: RTMACData) => void,
-    onAlert: (alert: any) => void,
+    _onAlert: (alert: unknown) => void,
     onError?: (err: Error) => void
   ): void {
     this.eventSource = new EventSource(this.url);

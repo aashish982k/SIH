@@ -164,6 +164,9 @@ export interface ThreatMatrixEntry {
   confidence: number; // 0-100
   relatedWellCount: number;
   description: string;
+  reasoning?: string;
+  recommendation?: string;
+  evidence?: string[];
 }
 
 // ─── App State (for Zustand) ──────────────────────────────────────────────────

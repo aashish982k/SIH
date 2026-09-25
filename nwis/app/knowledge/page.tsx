@@ -1,19 +1,17 @@
 'use client';
 
-import { useState, useMemo, useRef, useEffect, useCallback, Suspense } from 'react';
+import { useState, useRef, useEffect, useCallback, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { MOCK_KNOWLEDGE } from '@/lib/mock/knowledge';
 import { cn, getRiskBgClass, getRiskLabel, getIncidentLabel, getIncidentColor, formatDepth, formatDate } from '@/lib/utils';
 import { fadeUp, staggerFast as stagger } from '@/lib/motion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Search, Filter, X, BookOpen,
   FileText, ArrowRight, Sparkles
@@ -136,7 +134,7 @@ function KnowledgeContent() {
   const loaderRef = useRef<HTMLDivElement>(null);
 
   const [results, setResults] = useState<KnowledgeEntry[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [, setIsLoading] = useState(false);
 
   // Fetch search results from backend
   const fetchResults = useCallback(async () => {
@@ -192,6 +190,7 @@ function KnowledgeContent() {
   const hasMore = paginated.length < filtered.length;
 
   // Reset page on filter change
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setPage(1); }, [query, incidentFilter, severityFilter, formationFilter]);
 
   // Infinite scroll
@@ -377,7 +376,7 @@ function KnowledgeContent() {
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm text-muted-foreground">
               <span className="font-semibold text-foreground">{filtered.length}</span> results
-              {query && <> for "<span className="text-primary">{query}</span>"</>}
+              {query && <> for &quot;<span className="text-primary">{query}</span>&quot;</>}
             </p>
           </div>
 

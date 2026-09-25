@@ -6,8 +6,7 @@ import { motion } from 'framer-motion';
 import { useAppStore } from '@/store/appStore';
 import { MOCK_WELLS } from '@/lib/mock/wells';
 import { getIncidentsForWell } from '@/lib/mock/incidents';
-import { getDistanceKm, cn, getRiskBgClass, getRiskLabel, getRiskBorderClass, getIncidentLabel, formatDepth, formatDistance } from '@/lib/utils';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { getDistanceKm, cn, formatDepth, formatDistance } from '@/lib/utils';
 import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,11 +15,11 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import {
-  MapPin, Sliders, Filter, AlertTriangle, ArrowRight,
-  Layers, Circle, Navigation, Info
+  MapPin, Filter, ArrowRight,
+  Circle, Navigation
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import type { Well, IncidentType } from '@/lib/types';
+import type { Well } from '@/lib/types';
 
 // ── Dynamic import of map (no SSR — Mapbox only runs client-side) ──────────────
 const WellMap = dynamic(() => import('@/components/map/WellMap'), {
@@ -89,7 +88,7 @@ function WellListItem({ well, distance, onClick }: {
 // ─── Map View Page ────────────────────────────────────────────────────────────
 export default function MapPage() {
   const router = useRouter();
-  const { activeWell, mapCenter, setMapCenter, mapRadius, setMapRadius, liveDepthFt } = useAppStore();
+  const { activeWell, mapCenter, setMapCenter, mapRadius, setMapRadius } = useAppStore();
 
   const [formationFilter, setFormationFilter] = useState<string>('all');
   const [incidentFilter, setIncidentFilter] = useState<string>('all');
@@ -188,8 +187,8 @@ export default function MapPage() {
     return () => { cancelled = true; };
   }, []);
 
-  // Nearby wells within radius
-  const nearbyWells = useMemo(() => {
+  // All processed wells (with distance, filtered by formation/incident but NOT radius)
+  const allProcessedWells = useMemo(() => {
     if (!activeWell || !mapCenter) return [];
     const sourceWells = backendWells.length ? backendWells : MOCK_WELLS;
     return sourceWells
@@ -203,7 +202,6 @@ export default function MapPage() {
         ),
         incidents: getIncidentsForWell(w.id),
       }))
-      .filter(w => w.distance <= mapRadius + (w.locationPrecision === 'approximate' ? 50 : 0))
       .filter(w => {
         if (formationFilter === 'all') return true;
         return w.formations.some(f => f.name.toLowerCase().includes(formationFilter.toLowerCase()));
@@ -213,7 +211,12 @@ export default function MapPage() {
         return w.incidents.some(i => i.type === incidentFilter);
       })
       .sort((a, b) => a.distance - b.distance);
-  }, [activeWell, mapCenter, backendWells, mapRadius, formationFilter, incidentFilter, reportCounts]);
+  }, [activeWell, mapCenter, backendWells, formationFilter, incidentFilter, reportCounts]);
+
+  // Nearby wells strictly within radius
+  const nearbyWells = useMemo(() => {
+    return allProcessedWells.filter(w => w.distance <= mapRadius + (w.locationPrecision === 'approximate' ? 50 : 0));
+  }, [allProcessedWells, mapRadius]);
 
   const handleWellClick = useCallback((wellId: string) => {
     setSelectedWellId(wellId);
@@ -230,15 +233,12 @@ export default function MapPage() {
       <div className="flex-1 relative">
         {activeWell ? (
           <WellMap
-            activeWell={activeWell}
             mapCenter={mapCenter ?? activeWell.coordinates}
-            nearbyWells={nearbyWells}
+            nearbyWells={allProcessedWells}
             radius={mapRadius}
             selectedWellId={selectedWellId}
             onWellClick={handleWellClick}
             onViewDetails={handleViewDetails}
-            liveDepthFt={liveDepthFt}
-            activeReportCount={reportCounts[activeWell.id] ?? 0}
             onMapClick={handleMapClick}
           />
         ) : (
@@ -260,20 +260,20 @@ export default function MapPage() {
         className="w-[380px] shrink-0 border-l border-border bg-card flex flex-col overflow-hidden"
       >
         {/* Header */}
-        <div className="px-4 py-4 border-b border-border">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="font-semibold text-foreground">Offset Wells</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {nearbyWells.length} within {mapRadius} km
-              </p>
+            <div className="px-4 py-4 border-b border-border">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="font-semibold text-foreground">Offset Wells</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {nearbyWells.length} within {mapRadius} km (Total: {allProcessedWells.length})
+                  </p>
+                </div>
+                <Badge variant="outline" className="text-xs">
+                  <Circle className="w-2 h-2 mr-1 fill-current text-primary" />
+                  {mapRadius} km
+                </Badge>
+              </div>
             </div>
-            <Badge variant="outline" className="text-xs">
-              <Circle className="w-2 h-2 mr-1 fill-current text-primary" />
-              {mapRadius} km
-            </Badge>
-          </div>
-        </div>
 
         {/* Controls */}
         <div className="px-4 py-4 border-b border-border space-y-4">

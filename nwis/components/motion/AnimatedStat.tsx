@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
-import { animate } from 'framer-motion';
+import React, { useEffect } from 'react';
+import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import { useReducedMotion } from '@/lib/motion/AnimationContext';
 import { cn } from '@/lib/utils';
 
@@ -18,35 +18,30 @@ export function AnimatedStat({
   duration = 0.8,
   format = (val) => Math.round(val).toString()
 }: AnimatedStatProps) {
-  const nodeRef = useRef<HTMLSpanElement>(null);
-  const prevValueRef = useRef(0);
   const reducedMotion = useReducedMotion();
+  
+  const motionValue = useMotionValue(0);
+  const springValue = useSpring(motionValue, { 
+    duration: duration * 1000, 
+    bounce: 0 
+  });
+  const displayValue = useTransform(springValue, (v) => format(v));
 
   useEffect(() => {
-    if (reducedMotion || !nodeRef.current) return;
-    
-    const node = nodeRef.current;
-    
-    const controls = animate(prevValueRef.current, value, {
-      duration,
-      ease: "easeOut",
-      onUpdate(v) {
-        node.textContent = format(v);
-      }
-    });
-    
-    prevValueRef.current = value;
-
-    return () => controls.stop();
-  }, [value, duration, format, reducedMotion]);
+    if (reducedMotion) {
+      motionValue.jump(value);
+    } else {
+      motionValue.set(value);
+    }
+  }, [value, motionValue, reducedMotion]);
 
   if (reducedMotion) {
     return <span className={className}>{format(value)}</span>;
   }
 
   return (
-    <span ref={nodeRef} className={cn(className, "tabular-nums")}>
-      {format(prevValueRef.current)}
-    </span>
+    <motion.span className={cn(className, "tabular-nums")}>
+      {displayValue}
+    </motion.span>
   );
 }
