@@ -4,29 +4,45 @@ import { env } from './config/env';
 import { checkConnection } from './config/db';
 import { ensureCollection, checkQdrantConnection } from './config/qdrant';
 import { initWebSocket } from './websocket';
+import { initLiveEngine } from './services/live/liveEngine';
+import { groqEnabled } from './services/groqService';
+import { embedOne } from './services/embeddingService';
 
 async function bootstrap(): Promise<void> {
-  // ── Verify MySQL ───────────────────────────────────────────────
   console.log('🔌  Connecting to MySQL...');
   await checkConnection();
   console.log('✅  MySQL connected');
 
-  // ── Verify + setup Qdrant ──────────────────────────────────────
-  console.log('🔌  Connecting to Qdrant...');
-  await checkQdrantConnection();
-  await ensureCollection();
+  try {
+    await checkQdrantConnection();
+    await ensureCollection();
+    console.log('✅  Qdrant connected');
+  } catch (err: any) {
+    console.warn(`⚠️   Qdrant unavailable (${err?.message}). Search falls back to keyword mode.`);
+  }
 
-  // ── HTTP + WebSocket server ────────────────────────────────────
   const httpServer = http.createServer(app);
-  initWebSocket(httpServer);
+  const io = initWebSocket(httpServer);
+  await initLiveEngine(io);
+
+  httpServer.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`\n❌  Port ${env.PORT} is already in use — another NWIS backend is probably running.`);
+      console.error(`    Stop it first (PowerShell):  Get-NetTCPConnection -LocalPort ${env.PORT} -State Listen | % { Stop-Process -Id $_.OwningProcess -Force }`);
+      console.error('    or set a different PORT in backend/.env (and NEXT_PUBLIC_API_URL / CORS if you change it).\n');
+    } else {
+      console.error('❌  Server error:', err.message);
+    }
+    process.exit(1);
+  });
 
   httpServer.listen(env.PORT, () => {
-    console.log(`\n🚀  NWIS Backend running on port ${env.PORT}`);
-    console.log(`    REST API : http://localhost:${env.PORT}/api`);
-    console.log(`    Health   : http://localhost:${env.PORT}/api/health`);
-    console.log(`    WebSocket: ws://localhost:${env.PORT}`);
-    console.log(`    Mode     : ${env.NODE_ENV}\n`);
+    console.log(`\n🚀  NWIS backend on http://localhost:${env.PORT}/api`);
+    console.log(`    Groq: ${groqEnabled() ? env.GROQ_MODEL : 'not configured (rules-based extraction; search still works)'}`);
   });
+
+  // Warm the embedding model so the first search is fast
+  embedOne('warm up').then(() => console.log('✅  Embedding model ready')).catch((e) => console.warn('⚠️   Embedding model not loaded:', e?.message));
 }
 
 bootstrap().catch((err) => {

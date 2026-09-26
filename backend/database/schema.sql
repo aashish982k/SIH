@@ -1,314 +1,279 @@
 -- ============================================================
--- NWIS — MySQL Schema
--- Version: 001
--- All timestamps in UTC
+-- NWIS — MySQL Schema  (v2 — MVP)
+-- Depths are stored in feet (MD unless the column says TVD).
+-- All timestamps in UTC.
 -- ============================================================
 
 SET FOREIGN_KEY_CHECKS = 0;
 
--- ────────────────────────────────────────────────────────────
--- 1. USERS
--- ────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS users (
-  id            CHAR(36)     NOT NULL PRIMARY KEY DEFAULT (UUID()),
+DROP TABLE IF EXISTS alerts;
+DROP TABLE IF EXISTS recommendations;
+DROP TABLE IF EXISTS risks;
+DROP TABLE IF EXISTS extraction_items;
+DROP TABLE IF EXISTS knowledge_chunks;
+DROP TABLE IF EXISTS documents;
+DROP TABLE IF EXISTS mud_programs;
+DROP TABLE IF EXISTS cement_jobs;
+DROP TABLE IF EXISTS casing_sections;
+DROP TABLE IF EXISTS operational_events;
+DROP TABLE IF EXISTS drilling_parameters;
+DROP TABLE IF EXISTS well_formations;
+DROP TABLE IF EXISTS well_surveys;
+DROP TABLE IF EXISTS wells;
+DROP TABLE IF EXISTS users;
+
+-- ── Users ────────────────────────────────────────────────────
+CREATE TABLE users (
+  id            CHAR(36)     NOT NULL PRIMARY KEY,
   name          VARCHAR(120) NOT NULL,
   email         VARCHAR(254) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
   role          ENUM('engineer','operator','administrator') NOT NULL DEFAULT 'engineer',
   is_active     BOOLEAN      NOT NULL DEFAULT TRUE,
   created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_users_email (email),
-  INDEX idx_users_role  (role)
+  updated_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ────────────────────────────────────────────────────────────
--- 2. WELLS
--- ────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS wells (
-  id              CHAR(36)       NOT NULL PRIMARY KEY DEFAULT (UUID()),
-  name            VARCHAR(120)   NOT NULL,
-  well_number     VARCHAR(60)    NULL,
-  field_name      VARCHAR(120)   NOT NULL,
-  block           VARCHAR(80)    NULL,
-  operator        VARCHAR(120)   NOT NULL DEFAULT 'Oil India Limited',
-  latitude        DECIMAL(10,7)  NOT NULL,
-  longitude       DECIMAL(10,7)  NOT NULL,
-  elevation_m     DECIMAL(8,2)   NULL COMMENT 'Kelly Bushing elevation in metres',
-  total_depth_ft  DECIMAL(10,2)  NULL,
-  status          ENUM('active','suspended','completed','abandoned') NOT NULL DEFAULT 'active',
-  spud_date       DATE           NULL,
-  completion_date DATE           NULL,
-  primary_formation VARCHAR(120) NULL COMMENT 'Primary reservoir/formation name',
-  created_at      DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at      DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_wells_status    (status),
-  INDEX idx_wells_field     (field_name),
-  INDEX idx_wells_lat_lng   (latitude, longitude)
+-- ── Wells ────────────────────────────────────────────────────
+CREATE TABLE wells (
+  id                CHAR(36)      NOT NULL PRIMARY KEY,
+  name              VARCHAR(120)  NOT NULL,
+  field_name        VARCHAR(120)  NOT NULL,
+  block             VARCHAR(80)   NULL,
+  pad               VARCHAR(40)   NULL COMMENT 'Wells on one pad share a surface location',
+  operator          VARCHAR(120)  NOT NULL DEFAULT 'Oil India Limited',
+  well_type         ENUM('exploratory','appraisal','development') NOT NULL DEFAULT 'development',
+  profile           ENUM('vertical','deviated') NOT NULL DEFAULT 'vertical',
+  latitude          DECIMAL(10,7) NOT NULL,
+  longitude         DECIMAL(10,7) NOT NULL,
+  location          POINT         NOT NULL SRID 4326,
+  kb_elevation_m    DECIMAL(8,2)  NULL,
+  total_depth_ft    DECIMAL(10,2) NULL COMMENT 'Final MD for completed wells',
+  planned_td_ft     DECIMAL(10,2) NULL,
+  current_depth_ft  DECIMAL(10,2) NULL COMMENT 'Live wells only',
+  status            ENUM('drilling','completed','suspended','abandoned') NOT NULL DEFAULT 'completed',
+  spud_date         DATE          NULL,
+  completion_date   DATE          NULL,
+  total_npt_hours   DECIMAL(8,2)  NOT NULL DEFAULT 0,
+  created_at        DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at        DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  SPATIAL INDEX idx_wells_location (location),
+  INDEX idx_wells_status (status),
+  INDEX idx_wells_field  (field_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ────────────────────────────────────────────────────────────
--- 3. WELL SURVEY / TRAJECTORY
--- ────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS well_surveys (
-  id               CHAR(36)      NOT NULL PRIMARY KEY DEFAULT (UUID()),
+-- ── Survey stations (minimum-curvature positions precomputed) ─
+CREATE TABLE well_surveys (
+  id               BIGINT        NOT NULL AUTO_INCREMENT PRIMARY KEY,
   well_id          CHAR(36)      NOT NULL,
-  measured_depth_ft DECIMAL(10,2) NOT NULL,
-  tvd_ft           DECIMAL(10,2) NULL  COMMENT 'True Vertical Depth',
-  inclination_deg  DECIMAL(6,3)  NULL,
-  azimuth_deg      DECIMAL(6,3)  NULL,
-  northing_ft      DECIMAL(12,3) NULL,
-  easting_ft       DECIMAL(12,3) NULL,
-  recorded_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  md_ft            DECIMAL(10,2) NOT NULL,
+  inclination_deg  DECIMAL(6,3)  NOT NULL,
+  azimuth_deg      DECIMAL(6,3)  NOT NULL,
+  tvd_ft           DECIMAL(10,2) NOT NULL,
+  north_ft         DECIMAL(12,2) NOT NULL,
+  east_ft          DECIMAL(12,2) NOT NULL,
   FOREIGN KEY (well_id) REFERENCES wells(id) ON DELETE CASCADE,
-  INDEX idx_survey_well  (well_id),
-  INDEX idx_survey_depth (well_id, measured_depth_ft)
+  INDEX idx_survey_well_md (well_id, md_ft)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ────────────────────────────────────────────────────────────
--- 4. FORMATIONS / GEOLOGICAL INFORMATION
--- ────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS well_formations (
-  id                 CHAR(36)      NOT NULL PRIMARY KEY DEFAULT (UUID()),
-  well_id            CHAR(36)      NOT NULL,
-  formation_name     VARCHAR(120)  NOT NULL,
-  top_depth_ft       DECIMAL(10,2) NOT NULL,
-  bottom_depth_ft    DECIMAL(10,2) NULL,
-  lithology          VARCHAR(120)  NULL  COMMENT 'e.g., Sandstone, Shale, Limestone',
-  pore_pressure_psi  DECIMAL(10,2) NULL,
-  fracture_gradient  DECIMAL(6,4)  NULL  COMMENT 'in psi/ft',
-  reservoir_notes    TEXT          NULL,
-  created_at         DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (well_id) REFERENCES wells(id) ON DELETE CASCADE,
-  INDEX idx_formation_well  (well_id),
-  INDEX idx_formation_name  (formation_name),
-  INDEX idx_formation_depth (well_id, top_depth_ft)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ────────────────────────────────────────────────────────────
--- 5. DRILLING PARAMETERS (eRTMAC feed snapshots)
--- ────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS drilling_parameters (
-  id                CHAR(36)      NOT NULL PRIMARY KEY DEFAULT (UUID()),
+-- ── Formation tops ───────────────────────────────────────────
+CREATE TABLE well_formations (
+  id                CHAR(36)      NOT NULL PRIMARY KEY,
   well_id           CHAR(36)      NOT NULL,
-  depth_ft          DECIMAL(10,2) NOT NULL,
-  rop_ft_per_hr     DECIMAL(8,2)  NULL  COMMENT 'Rate of Penetration',
-  wob_klbs          DECIMAL(8,2)  NULL  COMMENT 'Weight on Bit',
-  rpm               DECIMAL(6,1)  NULL  COMMENT 'Rotary Speed',
-  torque_kft_lbs    DECIMAL(8,2)  NULL,
-  spp_psi           DECIMAL(8,2)  NULL  COMMENT 'Standpipe Pressure',
-  flow_rate_gpm     DECIMAL(8,2)  NULL,
-  mud_weight_ppg    DECIMAL(6,3)  NULL,
-  ecd_ppg           DECIMAL(6,3)  NULL  COMMENT 'Equivalent Circulating Density',
-  temperature_f     DECIMAL(7,2)  NULL,
-  hook_load_klbs    DECIMAL(8,2)  NULL,
-  recorded_at       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  formation_name    VARCHAR(120)  NOT NULL,
+  seq               TINYINT       NOT NULL COMMENT 'Stratigraphic order, 1 = shallowest',
+  top_md_ft         DECIMAL(10,2) NOT NULL,
+  bottom_md_ft      DECIMAL(10,2) NULL,
+  top_tvd_ft        DECIMAL(10,2) NOT NULL,
+  bottom_tvd_ft     DECIMAL(10,2) NULL,
+  lithology         VARCHAR(120)  NULL,
+  is_predicted      BOOLEAN       NOT NULL DEFAULT FALSE COMMENT 'TRUE for live-well prognosis',
   FOREIGN KEY (well_id) REFERENCES wells(id) ON DELETE CASCADE,
-  INDEX idx_dp_well  (well_id),
-  INDEX idx_dp_depth (well_id, depth_ft),
-  INDEX idx_dp_time  (well_id, recorded_at)
+  INDEX idx_formation_well (well_id, seq),
+  INDEX idx_formation_name (formation_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ────────────────────────────────────────────────────────────
--- 6. OPERATIONAL EVENTS (incidents)
--- ────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS operational_events (
-  id              CHAR(36)      NOT NULL PRIMARY KEY DEFAULT (UUID()),
-  well_id         CHAR(36)      NOT NULL,
-  formation_id    CHAR(36)      NULL,
-  event_type      ENUM(
-    'mud_loss','kick','stuck_pipe','fishing','npt',
-    'torque_spike','pressure_anomaly','cementing_issue',
-    'casing_issue','well_control','blowout','other'
-  ) NOT NULL,
-  severity        ENUM('low','medium','high','critical') NOT NULL DEFAULT 'medium',
-  start_depth_ft  DECIMAL(10,2) NOT NULL,
-  end_depth_ft    DECIMAL(10,2) NULL,
-  description     TEXT          NOT NULL,
-  cause           TEXT          NULL,
-  impact          TEXT          NULL,
-  mitigation      TEXT          NULL,
-  lessons_learned TEXT          NULL,
-  outcome         TEXT          NULL,
-  duration_hours  DECIMAL(8,2)  NULL,
-  npt_hours       DECIMAL(8,2)  NULL COMMENT 'Non-Productive Time',
-  occurred_at     DATE          NOT NULL,
-  created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY (well_id)      REFERENCES wells(id) ON DELETE CASCADE,
-  FOREIGN KEY (formation_id) REFERENCES well_formations(id) ON DELETE SET NULL,
-  INDEX idx_event_well      (well_id),
+-- ── Real-time samples (eRTMAC) ───────────────────────────────
+CREATE TABLE drilling_parameters (
+  id               BIGINT        NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  well_id          CHAR(36)      NOT NULL,
+  recorded_at      DATETIME(3)   NOT NULL,
+  hole_depth_ft    DECIMAL(10,2) NOT NULL,
+  bit_depth_ft     DECIMAL(10,2) NOT NULL,
+  rig_state        ENUM('drilling','connection','circulating','tripping','reaming') NOT NULL,
+  rop_ft_hr        DECIMAL(8,2)  NULL,
+  wob_klbs         DECIMAL(8,2)  NULL,
+  rpm              DECIMAL(6,1)  NULL,
+  torque_kftlb     DECIMAL(8,2)  NULL,
+  spp_psi          DECIMAL(8,1)  NULL,
+  flow_in_gpm      DECIMAL(8,1)  NULL,
+  flow_out_gpm     DECIMAL(8,1)  NULL,
+  pit_volume_bbl   DECIMAL(8,1)  NULL,
+  hook_load_klbs   DECIMAL(8,1)  NULL,
+  mud_weight_ppg   DECIMAL(6,2)  NULL,
+  ecd_ppg          DECIMAL(6,2)  NULL,
+  total_gas_units  DECIMAL(8,1)  NULL,
+  FOREIGN KEY (well_id) REFERENCES wells(id) ON DELETE CASCADE,
+  INDEX idx_dp_well_time (well_id, recorded_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ── Documents ────────────────────────────────────────────────
+CREATE TABLE documents (
+  id                CHAR(36)      NOT NULL PRIMARY KEY,
+  well_id           CHAR(36)      NULL,
+  uploaded_by       CHAR(36)      NULL,
+  document_type     ENUM('WCR','DDR','mud_log','completion_report','other') NOT NULL DEFAULT 'other',
+  title             VARCHAR(255)  NOT NULL,
+  file_name         VARCHAR(255)  NOT NULL,
+  file_path         VARCHAR(500)  NULL COMMENT 'Relative to UPLOADS_DIR; NULL for seeded records',
+  file_size_bytes   BIGINT        NULL,
+  page_count        INT           NULL,
+  document_date     DATE          NULL,
+  status            ENUM('uploaded','processing','review','processed','failed') NOT NULL DEFAULT 'uploaded',
+  extraction_method VARCHAR(40)   NULL COMMENT 'groq:<model> | rules',
+  error_message     TEXT          NULL,
+  created_at        DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at        DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (well_id)     REFERENCES wells(id) ON DELETE SET NULL,
+  FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE SET NULL,
+  INDEX idx_doc_well   (well_id),
+  INDEX idx_doc_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ── Operational events (incidents) ───────────────────────────
+CREATE TABLE operational_events (
+  id                 CHAR(36)      NOT NULL PRIMARY KEY,
+  well_id            CHAR(36)      NOT NULL,
+  formation_name     VARCHAR(120)  NULL,
+  event_type         ENUM('mud_loss','kick','stuck_pipe','tight_hole','overpressure',
+                          'wellbore_instability','cementing_issue','fishing','other') NOT NULL,
+  severity           ENUM('low','medium','high','critical') NOT NULL DEFAULT 'medium',
+  depth_md_ft        DECIMAL(10,2) NOT NULL,
+  depth_tvd_ft       DECIMAL(10,2) NULL,
+  description        TEXT          NOT NULL,
+  cause              TEXT          NULL,
+  mitigation         TEXT          NULL,
+  mitigation_key     VARCHAR(60)   NULL COMMENT 'Normalised strategy used for “what worked” ranking',
+  outcome            TEXT          NULL,
+  outcome_rating     ENUM('resolved','partial','failed') NULL,
+  lessons_learned    TEXT          NULL,
+  npt_hours          DECIMAL(8,2)  NULL,
+  occurred_at        DATE          NULL,
+  source_document_id CHAR(36)      NULL,
+  source_page        INT           NULL,
+  verified           BOOLEAN       NOT NULL DEFAULT TRUE,
+  created_at         DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (well_id)            REFERENCES wells(id) ON DELETE CASCADE,
+  FOREIGN KEY (source_document_id) REFERENCES documents(id) ON DELETE SET NULL,
+  INDEX idx_event_well      (well_id, depth_md_ft),
   INDEX idx_event_type      (event_type),
-  INDEX idx_event_severity  (severity),
-  INDEX idx_event_depth     (well_id, start_depth_ft),
-  INDEX idx_event_formation (formation_id)
+  INDEX idx_event_formation (formation_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ────────────────────────────────────────────────────────────
--- 7. CASING SECTIONS
--- ────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS casing_sections (
-  id              CHAR(36)      NOT NULL PRIMARY KEY DEFAULT (UUID()),
+-- ── Casing / cement / mud programs ───────────────────────────
+CREATE TABLE casing_sections (
+  id              CHAR(36)      NOT NULL PRIMARY KEY,
   well_id         CHAR(36)      NOT NULL,
   casing_type     ENUM('conductor','surface','intermediate','production','liner') NOT NULL,
-  outer_dia_in    DECIMAL(6,3)  NOT NULL COMMENT 'Outer diameter in inches',
-  grade           VARCHAR(30)   NULL   COMMENT 'e.g., J55, K55, L80, P110',
-  weight_lb_ft    DECIMAL(7,3)  NULL,
-  shoe_depth_ft   DECIMAL(10,2) NOT NULL,
-  top_depth_ft    DECIMAL(10,2) NOT NULL DEFAULT 0,
-  set_date        DATE          NULL,
-  notes           TEXT          NULL,
-  created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  size_label      VARCHAR(20)   NOT NULL COMMENT 'e.g. 13-3/8"',
+  outer_dia_in    DECIMAL(6,3)  NOT NULL,
+  grade           VARCHAR(30)   NULL,
+  weight_lb_ft    DECIMAL(7,2)  NULL,
+  top_md_ft       DECIMAL(10,2) NOT NULL DEFAULT 0,
+  shoe_md_ft      DECIMAL(10,2) NOT NULL,
   FOREIGN KEY (well_id) REFERENCES wells(id) ON DELETE CASCADE,
   INDEX idx_casing_well (well_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ────────────────────────────────────────────────────────────
--- 8. CEMENT JOBS
--- ────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS cement_jobs (
-  id                  CHAR(36)      NOT NULL PRIMARY KEY DEFAULT (UUID()),
-  well_id             CHAR(36)      NOT NULL,
-  casing_section_id   CHAR(36)      NULL,
-  job_type            ENUM('primary','remedial','plug') NOT NULL DEFAULT 'primary',
-  top_of_cement_ft    DECIMAL(10,2) NULL,
-  cement_volume_bbls  DECIMAL(10,2) NULL,
-  slurry_density_ppg  DECIMAL(6,3)  NULL,
-  displacement_vol_bbls DECIMAL(10,2) NULL,
-  returns_obtained    BOOLEAN       NULL COMMENT 'Full returns to surface?',
-  cbil_run            BOOLEAN       NOT NULL DEFAULT FALSE COMMENT 'Cement bond log run?',
-  issues              TEXT          NULL,
-  result              ENUM('good','acceptable','poor','failed') NULL,
-  job_date            DATE          NULL,
-  created_at          DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+CREATE TABLE cement_jobs (
+  id                 CHAR(36)      NOT NULL PRIMARY KEY,
+  well_id            CHAR(36)      NOT NULL,
+  casing_section_id  CHAR(36)      NULL,
+  top_of_cement_ft   DECIMAL(10,2) NULL,
+  slurry_density_ppg DECIMAL(6,2)  NULL,
+  returns_obtained   BOOLEAN       NULL,
+  result             ENUM('good','acceptable','poor','failed') NULL,
+  issues             TEXT          NULL,
   FOREIGN KEY (well_id)           REFERENCES wells(id) ON DELETE CASCADE,
   FOREIGN KEY (casing_section_id) REFERENCES casing_sections(id) ON DELETE SET NULL,
   INDEX idx_cement_well (well_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ────────────────────────────────────────────────────────────
--- 9. MUD PROGRAMS
--- ────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS mud_programs (
-  id              CHAR(36)      NOT NULL PRIMARY KEY DEFAULT (UUID()),
+CREATE TABLE mud_programs (
+  id              CHAR(36)      NOT NULL PRIMARY KEY,
   well_id         CHAR(36)      NOT NULL,
   depth_from_ft   DECIMAL(10,2) NOT NULL,
-  depth_to_ft     DECIMAL(10,2) NULL,
-  mud_type        VARCHAR(80)   NOT NULL COMMENT 'e.g., Water-Based, Oil-Based, Synthetic',
-  mud_weight_ppg  DECIMAL(6,3)  NOT NULL,
-  viscosity_cp    DECIMAL(8,2)  NULL COMMENT 'Plastic viscosity in cP',
-  ph_value        DECIMAL(4,2)  NULL,
-  fluid_loss_cc   DECIMAL(6,2)  NULL COMMENT 'API fluid loss in cc/30min',
-  additives       TEXT          NULL COMMENT 'JSON or CSV list of additives',
-  total_loss_bbls DECIMAL(8,2)  NULL COMMENT 'Cumulative mud losses in this interval',
-  notes           TEXT          NULL,
-  created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  depth_to_ft     DECIMAL(10,2) NOT NULL,
+  mud_type        VARCHAR(80)   NOT NULL,
+  mud_weight_ppg  DECIMAL(6,2)  NOT NULL,
+  total_loss_bbl  DECIMAL(8,1)  NULL,
   FOREIGN KEY (well_id) REFERENCES wells(id) ON DELETE CASCADE,
-  INDEX idx_mud_well  (well_id),
-  INDEX idx_mud_depth (well_id, depth_from_ft)
+  INDEX idx_mud_well (well_id, depth_from_ft)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ────────────────────────────────────────────────────────────
--- 10. DOCUMENTS (WCR / DDR / report metadata)
--- ────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS documents (
-  id              CHAR(36)      NOT NULL PRIMARY KEY DEFAULT (UUID()),
-  well_id         CHAR(36)      NULL,
-  uploaded_by     CHAR(36)      NOT NULL,
-  document_type   ENUM('WCR','DDR','mud_log','completion_report','other') NOT NULL DEFAULT 'other',
-  file_name       VARCHAR(255)  NOT NULL,
-  file_path       VARCHAR(500)  NOT NULL,
-  file_size_bytes BIGINT        NULL,
-  document_date   DATE          NULL,
-  description     TEXT          NULL,
-  status          ENUM('uploaded','processing','processed','failed') NOT NULL DEFAULT 'uploaded',
+-- ── Extraction queue (awaiting engineer verification) ────────
+CREATE TABLE extraction_items (
+  id              CHAR(36)      NOT NULL PRIMARY KEY,
+  document_id     CHAR(36)      NOT NULL,
+  item_type       ENUM('event','formation_top','casing') NOT NULL DEFAULT 'event',
+  payload         JSON          NOT NULL,
+  confidence      DECIMAL(4,3)  NOT NULL DEFAULT 0.5,
+  source_page     INT           NULL,
+  source_quote    TEXT          NULL,
+  status          ENUM('pending','confirmed','rejected') NOT NULL DEFAULT 'pending',
+  created_event_id CHAR(36)     NULL,
+  reviewed_by     CHAR(36)      NULL,
+  reviewed_at     DATETIME      NULL,
   created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY (well_id)     REFERENCES wells(id) ON DELETE SET NULL,
-  FOREIGN KEY (uploaded_by) REFERENCES users(id),
-  INDEX idx_doc_well   (well_id),
-  INDEX idx_doc_user   (uploaded_by),
-  INDEX idx_doc_status (status)
+  FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
+  INDEX idx_extract_doc (document_id, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ────────────────────────────────────────────────────────────
--- 11. KNOWLEDGE CHUNKS (links MySQL ↔ Qdrant)
--- ────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS knowledge_chunks (
-  id               CHAR(36)      NOT NULL PRIMARY KEY DEFAULT (UUID()),
-  document_id      CHAR(36)      NULL,
-  event_id         CHAR(36)      NULL COMMENT 'If chunk is from an operational_event',
-  well_id          CHAR(36)      NULL,
-  qdrant_vector_id CHAR(36)      NULL UNIQUE COMMENT 'ID stored in Qdrant',
-  source_type      ENUM('document','event','lesson','mitigation','formation') NOT NULL,
-  chunk_text       TEXT          NOT NULL,
-  chunk_index      INT           NULL COMMENT 'Position of this chunk in the source document',
-  formation_name   VARCHAR(120)  NULL,
-  depth_ft         DECIMAL(10,2) NULL,
-  event_type       VARCHAR(50)   NULL,
-  severity         VARCHAR(20)   NULL,
-  is_embedded      BOOLEAN       NOT NULL DEFAULT FALSE COMMENT 'FALSE = zero-vector placeholder; TRUE = real embedding',
-  created_at       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+-- ── Knowledge chunks (MySQL ↔ Qdrant link) ───────────────────
+CREATE TABLE knowledge_chunks (
+  id              CHAR(36)      NOT NULL PRIMARY KEY COMMENT 'Also the Qdrant point id',
+  document_id     CHAR(36)      NULL,
+  event_id        CHAR(36)      NULL,
+  well_id         CHAR(36)      NULL,
+  source_type     ENUM('document','event') NOT NULL,
+  chunk_text      TEXT          NOT NULL,
+  page            INT           NULL,
+  formation_name  VARCHAR(120)  NULL,
+  depth_ft        DECIMAL(10,2) NULL,
+  event_type      VARCHAR(40)   NULL,
+  is_embedded     BOOLEAN       NOT NULL DEFAULT FALSE,
+  created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
   FOREIGN KEY (event_id)    REFERENCES operational_events(id) ON DELETE CASCADE,
   FOREIGN KEY (well_id)     REFERENCES wells(id) ON DELETE SET NULL,
-  INDEX idx_chunk_doc        (document_id),
-  INDEX idx_chunk_event      (event_id),
-  INDEX idx_chunk_well       (well_id),
-  INDEX idx_chunk_embedded   (is_embedded),
-  INDEX idx_chunk_source_type (source_type)
+  INDEX idx_chunk_well (well_id),
+  FULLTEXT INDEX ft_chunk_text (chunk_text)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ────────────────────────────────────────────────────────────
--- 12. RISKS / ALERTS
--- ────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS risks (
-  id                CHAR(36)      NOT NULL PRIMARY KEY DEFAULT (UUID()),
-  well_id           CHAR(36)      NOT NULL,
-  risk_type         ENUM(
-    'mud_loss','stuck_pipe','kick','overpressure','torque_spike',
-    'cementing_issue','casing_issue','well_control','other'
-  ) NOT NULL,
-  depth_ft          DECIMAL(10,2) NULL,
-  formation_name    VARCHAR(120)  NULL,
-  severity          ENUM('low','medium','high','critical') NOT NULL,
-  probability       DECIMAL(5,4)  NULL COMMENT '0.0 to 1.0 — set by ML in Part 2',
-  confidence        DECIMAL(5,4)  NULL COMMENT '0.0 to 1.0',
-  message           TEXT          NOT NULL,
-  description       TEXT          NULL,
-  source            ENUM('rule_engine','ml_model','manual') NOT NULL DEFAULT 'rule_engine',
-  related_well_ids  JSON          NULL COMMENT 'Array of nearby well IDs that contributed',
-  status            ENUM('active','resolved','dismissed') NOT NULL DEFAULT 'active',
-  resolved_at       DATETIME      NULL,
-  created_at        DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+-- ── Alerts (look-ahead + live) ───────────────────────────────
+CREATE TABLE alerts (
+  id              CHAR(36)      NOT NULL PRIMARY KEY,
+  well_id         CHAR(36)      NOT NULL,
+  kind            ENUM('lookahead','live') NOT NULL,
+  risk_type       VARCHAR(40)   NOT NULL,
+  severity        ENUM('low','medium','high','critical') NOT NULL,
+  probability     DECIMAL(5,4)  NOT NULL,
+  bit_depth_ft    DECIMAL(10,2) NOT NULL,
+  zone_top_ft     DECIMAL(10,2) NULL,
+  zone_base_ft    DECIMAL(10,2) NULL,
+  formation_name  VARCHAR(120)  NULL,
+  title           VARCHAR(255)  NOT NULL,
+  message         TEXT          NOT NULL,
+  evidence        JSON          NULL,
+  recommendations JSON          NULL,
+  status          ENUM('active','acknowledged','resolved','false_alarm') NOT NULL DEFAULT 'active',
+  feedback        TEXT          NULL,
+  acknowledged_by CHAR(36)      NULL,
+  acknowledged_at DATETIME      NULL,
+  created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (well_id) REFERENCES wells(id) ON DELETE CASCADE,
-  INDEX idx_risk_well     (well_id),
-  INDEX idx_risk_type     (risk_type),
-  INDEX idx_risk_status   (status),
-  INDEX idx_risk_severity (severity),
-  INDEX idx_risk_created  (created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ────────────────────────────────────────────────────────────
--- 13. RECOMMENDATIONS
--- ────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS recommendations (
-  id               CHAR(36)      NOT NULL PRIMARY KEY DEFAULT (UUID()),
-  well_id          CHAR(36)      NOT NULL,
-  risk_id          CHAR(36)      NULL,
-  recommendation   TEXT          NOT NULL,
-  rationale        TEXT          NULL,
-  source           ENUM('rule_engine','ml_model','knowledge_base','manual') NOT NULL DEFAULT 'rule_engine',
-  confidence       DECIMAL(5,4)  NULL,
-  priority         ENUM('low','medium','high','critical') NOT NULL DEFAULT 'medium',
-  status           ENUM('pending','applied','dismissed') NOT NULL DEFAULT 'pending',
-  applied_at       DATETIME      NULL,
-  created_at       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (well_id) REFERENCES wells(id) ON DELETE CASCADE,
-  FOREIGN KEY (risk_id) REFERENCES risks(id) ON DELETE SET NULL,
-  INDEX idx_rec_well   (well_id),
-  INDEX idx_rec_risk   (risk_id),
-  INDEX idx_rec_status (status)
+  INDEX idx_alert_well (well_id, status, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 SET FOREIGN_KEY_CHECKS = 1;

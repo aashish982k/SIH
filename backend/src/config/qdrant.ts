@@ -4,34 +4,43 @@ import { env } from './env';
 export const qdrantClient = new QdrantClient({
   url: env.QDRANT_URL,
   ...(env.QDRANT_API_KEY ? { apiKey: env.QDRANT_API_KEY } : {}),
+  checkCompatibility: false,
 });
 
+const PAYLOAD_INDEXES: Array<{ field: string; type: 'keyword' | 'float' }> = [
+  { field: 'well_id', type: 'keyword' },
+  { field: 'source_type', type: 'keyword' },
+  { field: 'event_type', type: 'keyword' },
+  { field: 'formation', type: 'keyword' },
+  { field: 'depth_ft', type: 'float' },
+];
+
 /**
- * Creates the knowledge collection if it does not already exist.
- * Safe to call on every startup.
+ * Creates the knowledge collection, or recreates it when the configured
+ * embedding dimension changed. Safe to call on every startup.
  */
-export async function ensureCollection(): Promise<void> {
-  const collectionName = env.QDRANT_COLLECTION_NAME;
+export async function ensureCollection(opts: { recreate?: boolean } = {}): Promise<void> {
+  const name = env.QDRANT_COLLECTION_NAME;
+  const { collections } = await qdrantClient.getCollections();
+  let exists = collections.some((c) => c.name === name);
 
-  const collections = await qdrantClient.getCollections();
-  const exists = collections.collections.some((c) => c.name === collectionName);
-
+  if (exists) {
+    const info: any = await qdrantClient.getCollection(name);
+    const size = info?.config?.params?.vectors?.size;
+    if (opts.recreate || (size && size !== env.EMBEDDING_DIMENSION)) {
+      await qdrantClient.deleteCollection(name);
+      exists = false;
+    }
+  }
   if (!exists) {
-    await qdrantClient.createCollection(collectionName, {
-      vectors: {
-        size: env.EMBEDDING_DIMENSION,
-        distance: 'Cosine',
-      },
-    });
-    console.log(`✅  Qdrant collection "${collectionName}" created (dim=${env.EMBEDDING_DIMENSION})`);
-  } else {
-    console.log(`✅  Qdrant collection "${collectionName}" already exists`);
+    await qdrantClient.createCollection(name, { vectors: { size: env.EMBEDDING_DIMENSION, distance: 'Cosine' } });
+    for (const { field, type } of PAYLOAD_INDEXES) {
+      await qdrantClient.createPayloadIndex(name, { field_name: field, field_schema: type, wait: true });
+    }
+    console.log(`✅  Qdrant collection "${name}" created (dim=${env.EMBEDDING_DIMENSION})`);
   }
 }
 
-/**
- * Verify Qdrant is reachable.
- */
 export async function checkQdrantConnection(): Promise<void> {
   await qdrantClient.getCollections();
 }

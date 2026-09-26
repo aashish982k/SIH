@@ -2,33 +2,35 @@ import { Server as HttpServer } from 'http';
 import { Server as SocketServer } from 'socket.io';
 import { env } from '../config/env';
 import { socketAuthMiddleware } from './middleware';
-import { registerHandlers } from './handlers';
+import { WS_EVENTS } from './events';
 
 let io: SocketServer;
 
+/**
+ * Socket.IO is server → browser only for drilling data. Clients join a well room
+ * and receive drilling:update, alert:new, alert:update, sim:state and sim:reset.
+ */
 export function initWebSocket(httpServer: HttpServer): SocketServer {
   io = new SocketServer(httpServer, {
-    cors: {
-      origin: env.CORS_ORIGIN,
-      methods: ['GET', 'POST'],
-      credentials: true,
-    },
+    cors: { origin: env.CORS_ORIGIN, methods: ['GET', 'POST'], credentials: true },
     transports: ['websocket', 'polling'],
   });
-
-  // Apply JWT authentication to all socket connections
   io.use(socketAuthMiddleware);
-
-  // Register event handlers for each authenticated connection
   io.on('connection', (socket) => {
-    registerHandlers(io, socket);
+    socket.on(WS_EVENTS.JOIN_WELL, (wellId: unknown) => {
+      if (typeof wellId !== 'string' || !wellId) return;
+      for (const r of socket.rooms) if (r.startsWith('well:')) socket.leave(r);
+      socket.join(`well:${wellId}`);
+      socket.emit('well:joined', { wellId });
+    });
+    socket.on(WS_EVENTS.LEAVE_WELL, (wellId: unknown) => {
+      if (typeof wellId === 'string') socket.leave(`well:${wellId}`);
+    });
   });
-
   console.log('✅  WebSocket server initialised');
   return io;
 }
 
-/** Returns the Socket.IO instance (used for broadcasting from services) */
 export function getIO(): SocketServer {
   if (!io) throw new Error('WebSocket server not initialised — call initWebSocket() first');
   return io;

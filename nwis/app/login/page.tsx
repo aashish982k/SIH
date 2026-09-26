@@ -2,125 +2,93 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { useAppStore } from '@/store/appStore';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Droplets, Lock, AlertTriangle, Eye, EyeOff } from 'lucide-react';
+import { Logo } from '@/components/shell/Logo';
+import { Btn, Field, inputCls } from '@/components/kit';
+import { api } from '@/lib/api';
+import { useApp } from '@/lib/store';
+import type { User } from '@/lib/types';
 
-const schema = z.object({
-  username: z.string().min(1, 'Username is required'),
-  password: z.string().min(1, 'Password is required'),
-});
-type FormData = z.infer<typeof schema>;
+const DEMO = [
+  { label: 'Drilling engineer', email: 'rahul.sharma@nwis.com', password: 'engineer1234' },
+  { label: 'Administrator', email: 'admin@nwis.com', password: 'admin1234' },
+];
 
 export default function LoginPage() {
   const router = useRouter();
-  const setIsAdmin = useAppStore(s => s.setIsAdmin);
-  const [showPw, setShowPw] = useState(false);
+  const setAuth = useApp((s) => s.setAuth);
+  const [email, setEmail] = useState(DEMO[0].email);
+  const [password, setPassword] = useState(DEMO[0].password);
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
-    resolver: zodResolver(schema),
-  });
-
-  async function onSubmit(data: FormData) {
-    setError('');
-    setLoading(true);
-    await new Promise(r => setTimeout(r, 800));
-
-    if (data.username === 'admin' && data.password === 'admin@123') {
-      localStorage.setItem('nwis_role', 'admin');
-      // Set cookie so middleware can protect /admin
-      document.cookie = 'nwis_role=admin; path=/; max-age=86400; SameSite=Lax';
-      setIsAdmin(true);
-      router.push('/admin');
-    } else {
-      setError('Invalid credentials. Please try again.');
-    }
-    setLoading(false);
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true); setError('');
+    try {
+      const { token, user } = await api<{ token: string; user: User }>('/auth/login', { method: 'POST', json: { email, password } });
+      setAuth(token, user);
+      router.replace('/');
+    } catch (err: any) {
+      setError(err.message);
+    } finally { setBusy(false); }
   }
 
   return (
-    <div className="min-h-[calc(100vh-64px-80px)] flex items-center justify-center px-4">
-      <motion.div
-        initial={{ opacity: 0, y: 24, scale: 0.97 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.4, ease: 'easeOut' }}
-        className="w-full max-w-sm"
-      >
-        <div className="text-center mb-6">
-          <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center mx-auto mb-3">
-            <Droplets className="w-6 h-6 text-primary-foreground" />
+    <div className="grid min-h-screen lg:grid-cols-[1.1fr_1fr]">
+      <div className="relative hidden overflow-hidden border-r border-line bg-panel lg:block">
+        <DepthArt />
+        <div className="relative z-10 flex h-full flex-col justify-between p-10">
+          <div className="flex items-center gap-3"><Logo size={34} /><span className="font-display text-xl font-bold tracking-wide">NWIS</span></div>
+          <div className="max-w-md">
+            <div className="label-caps mb-3">Oil India Limited · alongside eRTMAC</div>
+            <h1 className="font-display text-[40px] font-bold leading-[1.05] text-balance">Every offset well’s experience, one step ahead of the bit.</h1>
+            <p className="mt-4 text-[15px] leading-relaxed text-muted-fg">
+              Offset wells within your radius, compared formation by formation. Look-ahead warnings before known trouble zones. Past fixes ranked by how often they worked.
+            </p>
           </div>
-          <h1 className="text-xl font-bold text-foreground">Admin Access</h1>
-          <p className="text-sm text-muted-foreground mt-1">Sign in to access the NWIS Admin Panel</p>
+          <p className="text-[12px] text-faint">Demo data is synthetic and modelled on Upper Assam stratigraphy.</p>
         </div>
+      </div>
 
-        <Card className="border-border/60 shadow-lg">
-          <CardContent className="p-6">
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              <div>
-                <Label htmlFor="username" className="text-xs font-medium">Username</Label>
-                <Input
-                  id="username"
-                  placeholder="admin"
-                  className="mt-1.5 h-10"
-                  {...register('username')}
-                />
-                {errors.username && (
-                  <p className="text-xs text-destructive mt-1">{errors.username.message}</p>
-                )}
-              </div>
-              <div>
-                <Label htmlFor="password" className="text-xs font-medium">Password</Label>
-                <div className="relative mt-1.5">
-                  <Input
-                    id="password"
-                    type={showPw ? 'text' : 'password'}
-                    placeholder="••••••••"
-                    className="h-10 pr-10"
-                    {...register('password')}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPw(v => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-                {errors.password && (
-                  <p className="text-xs text-destructive mt-1">{errors.password.message}</p>
-                )}
-              </div>
-
-              {error && (
-                <Alert variant="destructive" className="py-2">
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  <AlertDescription className="text-xs">{error}</AlertDescription>
-                </Alert>
-              )}
-
-              <Button type="submit" className="w-full h-10 gap-2" disabled={loading}>
-                <Lock className="w-4 h-4" />
-                {loading ? 'Signing in…' : 'Sign In'}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        <p className="text-center text-xs text-muted-foreground mt-4">
-          Demo credentials: <code className="bg-muted px-1 rounded">admin</code> / <code className="bg-muted px-1 rounded">admin@123</code>
-        </p>
-      </motion.div>
+      <div className="flex items-center justify-center p-6">
+        <form onSubmit={submit} className="w-full max-w-sm">
+          <div className="mb-8 flex items-center gap-3 lg:hidden"><Logo size={30} /><span className="font-display text-lg font-bold">NWIS</span></div>
+          <h2 className="font-display text-2xl font-semibold">Sign in</h2>
+          <p className="mt-1 text-[13.5px] text-muted-fg">Use your NWIS account.</p>
+          <div className="mt-6 grid gap-4">
+            <Field label="Email"><input id="email" className={inputCls} type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required /></Field>
+            <Field label="Password"><input id="password" className={inputCls} type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></Field>
+            {error && <p role="alert" className="text-[13px] text-[var(--r-crit)]">{error}</p>}
+            <Btn variant="primary" type="submit" loading={busy} className="h-10">Sign in</Btn>
+          </div>
+          <div className="mt-8 rounded-xl border border-line bg-panel p-3">
+            <div className="label-caps mb-2">Demo accounts</div>
+            <div className="grid gap-1.5">
+              {DEMO.map((d) => (
+                <button key={d.email} type="button" onClick={() => { setEmail(d.email); setPassword(d.password); }}
+                  className="flex items-center justify-between rounded-lg px-2 py-1.5 text-left text-[13px] hover:bg-panel-2">
+                  <span>{d.label}</span><span className="readout text-[11.5px] text-faint">{d.email}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </form>
+      </div>
     </div>
+  );
+}
+
+/** Decorative formation bands with a well path cutting through them. */
+function DepthArt() {
+  const bands = ['#C9B99A', '#D8C48A', '#A77B5C', '#E3B64E', '#4B4A4F', '#B99A62', '#5E6B73', '#8FB3C9'];
+  return (
+    <svg className="absolute inset-0 h-full w-full opacity-[0.22]" viewBox="0 0 600 800" preserveAspectRatio="none" aria-hidden="true">
+      {bands.map((c, i) => (
+        <path key={c} d={`M0 ${90 + i * 88} C 150 ${70 + i * 88}, 380 ${130 + i * 88}, 600 ${100 + i * 88} L600 ${190 + i * 88} C 380 ${220 + i * 88}, 150 ${160 + i * 88}, 0 ${180 + i * 88} Z`} fill={c} />
+      ))}
+      <path d="M430 0 L430 260 C 430 380, 360 470, 300 800" stroke="var(--accent)" strokeWidth="5" fill="none" />
+      <path d="M180 0 L180 800" stroke="var(--fg)" strokeWidth="2" strokeDasharray="6 8" fill="none" />
+      <path d="M520 0 L520 800" stroke="var(--fg)" strokeWidth="2" strokeDasharray="6 8" fill="none" />
+    </svg>
   );
 }

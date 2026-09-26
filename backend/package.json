@@ -4,16 +4,19 @@
   "description": "eRTMAC-NWIS Backend — AI-powered offset well intelligence platform",
   "main": "dist/server.js",
   "scripts": {
-    "build": "tsc",
     "dev": "tsx watch src/server.ts",
-    "start": "node dist/server.js",
+    "build": "tsc",
+    "start": "node dist/src/server.js",
+    "typecheck": "tsc --noEmit",
     "db:setup": "tsx scripts/setupDatabase.ts",
     "db:seed": "tsx scripts/runSeeds.ts",
-    "qdrant:setup": "tsx scripts/setupQdrant.ts",
-    "setup": "npm run db:setup && npm run qdrant:setup && npm run db:seed",
-    "typecheck": "tsc --noEmit"
+    "kb:index": "tsx scripts/indexKnowledge.ts",
+    "samples": "tsx scripts/makeSampleReports.ts",
+    "setup": "npm run db:setup && npm run db:seed && npm run kb:index && npm run samples",
+    "demo:reset": "tsx scripts/resetDemo.ts"
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.3.0",
     "@qdrant/js-client-rest": "^1.9.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
@@ -23,6 +26,7 @@
     "multer": "^1.4.5-lts.1",
     "mysql2": "^3.10.1",
     "pdf-parse": "^2.4.5",
+    "pdfkit": "^0.20.2",
     "socket.io": "^4.7.5",
     "tesseract.js": "^7.0.0",
     "uuid": "^10.0.0",
@@ -35,6 +39,7 @@
     "@types/jsonwebtoken": "^9.0.6",
     "@types/multer": "^1.4.11",
     "@types/node": "^20.14.9",
+    "@types/pdfkit": "^0.17.6",
     "@types/uuid": "^10.0.0",
     "tsx": "^4.16.2",
     "typescript": "^5.5.3"

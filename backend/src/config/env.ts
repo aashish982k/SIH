@@ -7,7 +7,7 @@ const envSchema = z.object({
 
   // MySQL
   MYSQL_HOST: z.string().min(1, 'MYSQL_HOST is required'),
-  MYSQL_PORT: z.string().default('3306').transform(Number),
+  MYSQL_PORT: z.string().default('3307').transform(Number),
   MYSQL_USER: z.string().min(1, 'MYSQL_USER is required'),
   MYSQL_PASSWORD: z.string().min(1, 'MYSQL_PASSWORD is required'),
   MYSQL_DATABASE: z.string().min(1, 'MYSQL_DATABASE is required'),
@@ -20,13 +20,17 @@ const envSchema = z.object({
   QDRANT_URL: z.string().url('QDRANT_URL must be a valid URL'),
   QDRANT_API_KEY: z.string().optional().default(''),
   QDRANT_COLLECTION_NAME: z.string().default('nwis_knowledge'),
-  OCR_PROVIDER: z.enum(['pdf-parse', 'tesseract', 'custom']).default('pdf-parse'),
-  EMBEDDING_DIMENSION: z.string().default('1536').transform(Number),
-  EMBEDDING_MODEL: z.string().default('grok-embedding'),
 
-  // Grok
-  GROK_API_KEY: z.string().optional().default(''),
-  OPENAI_API_KEY: z.string().optional().default(''),
+  // Local embeddings (downloaded once from Hugging Face, then cached)
+  EMBEDDING_MODEL: z.string().default('Xenova/all-MiniLM-L6-v2'),
+  EMBEDDING_DIMENSION: z.string().default('384').transform(Number),
+
+  // Groq — document extraction and cited answers
+  GROQ_API_KEY: z.string().optional().default(''),
+  GROQ_MODEL: z.string().default('openai/gpt-oss-120b'),
+
+  // Offset intelligence defaults
+  DEFAULT_RADIUS_KM: z.string().default('10').transform(Number),
 
   // Files
   UPLOADS_DIR: z.string().default('./uploads'),

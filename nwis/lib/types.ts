@@ -1,180 +1,92 @@
-// ─── Core Domain Types ────────────────────────────────────────────────────────
+export type Severity = 'low' | 'medium' | 'high' | 'critical';
+export type RiskType = 'mud_loss' | 'kick' | 'stuck_pipe' | 'tight_hole' | 'overpressure' | 'wellbore_instability';
+export type EventType = RiskType | 'cementing_issue' | 'fishing' | 'other';
 
-export type RiskLevel = 'low' | 'medium' | 'high' | 'critical';
-export type IncidentType = 'mud_loss' | 'kick' | 'stuck_pipe' | 'npt' | 'blowout' | 'washout';
-export type WellStatus = 'active' | 'completed' | 'suspended' | 'abandoned';
-export type AlertStatus = 'new' | 'acknowledged' | 'resolved';
-export type UploadStatus = 'queued' | 'processing' | 'extracted' | 'error' | 'saved';
-
-// ─── Geographic ───────────────────────────────────────────────────────────────
-
-export interface Coordinates {
-  lat: number;
-  lng: number;
-}
-
-// ─── Formation ────────────────────────────────────────────────────────────────
+export interface User { id: string; name: string; email: string; role: string; }
 
 export interface Formation {
-  id: string;
-  name: string;
-  depthTopFt: number;
-  depthBaseFt: number;
-  lithology: string; // 'sandstone' | 'shale' | 'limestone' | 'coal' | 'anhydrite'
-  color: string;     // hex for stratigraphy log visualization
-  porosity?: number; // percentage
-  fluidType?: 'gas' | 'oil' | 'water' | 'dry';
+  name: string; seq: number; lithology: string; color: string;
+  topMd: number; bottomMd: number | null; topTvd: number; bottomTvd: number | null; predicted: boolean;
 }
-
-// ─── Incident ─────────────────────────────────────────────────────────────────
-
-export interface Incident {
-  id: string;
-  wellId: string;
-  type: IncidentType;
-  severity: RiskLevel;
-  depthFt: number;
-  date: string; // ISO
-  description: string;
-  mitigation: string;
-  lessonsLearned: string;
-  durationHours: number; // NPT duration
-  formation?: string;
-  sourceReportId?: string;
-}
-
-// ─── Well ─────────────────────────────────────────────────────────────────────
 
 export interface Well {
-  id: string;
-  name: string;
-  block: string;
-  field: string;
-  operator: string;
-  status: WellStatus;
-  coordinates: Coordinates;
-  spudDate: string;       // ISO date
-  completionDate?: string;
-  totalDepthFt: number;
-  currentDepthFt?: number; // only for active wells
-  measuredDepthFt: number;
-  trueVerticalDepthFt: number;
-  inclination: number;    // degrees
-  azimuth: number;        // degrees
-  casingProgram: CasingSection[];
-  formations: Formation[];
-  incidents: Incident[];
-  riskScore?: number;     // 0-100, only for active wells
-  riskLevel?: RiskLevel;
+  id: string; name: string; field: string; block: string | null; pad: string | null; wellType: string; profile: 'vertical' | 'deviated';
+  status: 'drilling' | 'completed' | 'suspended' | 'abandoned'; lat: number; lon: number;
+  totalDepthFt: number | null; plannedTdFt: number | null; currentDepthFt: number | null;
+  spudDate: string | null; completionDate: string | null; totalNptHours: number; eventCount?: number; severeCount?: number;
 }
 
-export interface CasingSection {
-  id: string;
-  name: string;       // '30" Conductor' | '20" Surface' | '13⅜" Intermediate' | '9⅝" Production'
-  sizeinches: number;
-  setDepthFt: number;
-  cementTopFt: number;
-  cementBottomFt: number;
-  grade: string;
-  weight: string;
+export interface DrillEvent {
+  id: string; wellId: string; wellName: string; formation: string | null; type: EventType; severity: Severity;
+  depthMd: number; depthTvd: number; description: string; cause: string | null; mitigation: string | null; mitigationKey: string | null;
+  outcome: string | null; outcomeRating: 'resolved' | 'partial' | 'failed' | null; lessons: string | null; nptHours: number | null;
+  occurredAt: string | null; sourceDocumentId: string | null; sourceDocumentTitle: string | null; sourcePage: number | null;
+  distanceKm?: number; equivalentDepthFt?: number;
 }
 
-// ─── Alerts ───────────────────────────────────────────────────────────────────
+export interface WellDetail extends Well {
+  formations: Formation[]; surveys: Array<{ md: number; inc: number; azi: number; tvd: number; north: number; east: number }>;
+  events: DrillEvent[];
+  casing: Array<{ id: string; type: string; size: string; odIn: number; grade: string | null; weight: number | null; topMd: number; shoeMd: number }>;
+  cement: Array<{ id: string; casing: string | null; tocFt: number | null; densityPpg: number | null; returns: boolean | null; result: string | null; issues: string | null }>;
+  mud: Array<{ fromFt: number; toFt: number; type: string; weightPpg: number; lossBbl: number | null }>;
+  documents: Array<{ id: string; title: string; document_type: string; document_date: string | null; page_count: number | null; status: string }>;
+}
+
+export interface Offset extends Well {
+  surfaceDistanceKm: number; nearestDistanceKm: number; distanceByFormation: Record<string, number>;
+  bottomHole: [number, number]; horizontalDisplacementFt: number; path: Array<[number, number]>; formations: Formation[];
+}
+
+export interface HazardZone {
+  id: string; type: RiskType; label: string; formation: string; topFt: number; baseFt: number; peakFt: number;
+  peakProbability: number; offsetsWithEvent: number; offsetsPenetrated: number; evidence: DrillEvent[]; nptHours: number; distanceFt?: number;
+}
+
+export interface HazardProfile {
+  wellId: string; radiusKm: number; binFt: number; sigmaKm: number;
+  offsets: Array<Omit<Offset, 'formations' | 'path'>>; formations: Formation[];
+  bins: Array<{ depth: number; formation: string | null; rel: number | null; p: Record<RiskType, number>; wells: number }>;
+  zones: HazardZone[]; method: string;
+}
+
+export interface Sample {
+  t: string; simTime: number; holeDepth: number; bitDepth: number; rigState: string; formation: string | null;
+  rop: number; wob: number; rpm: number; torque: number; spp: number; flowIn: number; flowOut: number; pit: number;
+  hookLoad: number; mw: number; ecd: number; gas: number; dxc: number;
+}
+
+export interface RiskSnapshot {
+  overall: number;
+  byType: Record<RiskType, { prior: number; live: number; fused: number; reasons: string[] }>;
+  nextZone: (HazardZone & { distanceFt: number }) | null;
+}
+
+export interface WhatWorked {
+  scope: string; basedOn: number;
+  options: Array<{ key: string; label: string; uses: number; successRate: number; avgNptHours: number; example: { wellName: string; depthMd: number; text: string; outcome: string } }>;
+}
 
 export interface Alert {
-  id: string;
-  wellId: string;
-  message: string;
-  riskLevel: RiskLevel;
-  status: AlertStatus;
-  relatedWellIds: string[];
-  recommendedAction: string;
-  depthFt: number;
-  incidentType: IncidentType;
-  timestamp: string; // ISO
-  acknowledgedAt?: string;
+  id: string; wellId: string; wellName: string; kind: 'lookahead' | 'live'; riskType: RiskType; severity: Severity; probability: number;
+  bitDepthFt: number; zoneTopFt: number | null; zoneBaseFt: number | null; formation: string | null; title: string; message: string;
+  evidence: DrillEvent[] | null; recommendations: WhatWorked | null;
+  status: 'active' | 'acknowledged' | 'resolved' | 'false_alarm'; feedback: string | null; acknowledgedAt: string | null; acknowledgedBy: string | null;
+  createdAt: string; updatedAt: string;
 }
 
-// ─── Real-time Feed (eRTMAC) ──────────────────────────────────────────────────
+export interface LiveState { wellId: string; running: boolean; speed: number; history: Sample[]; risk: RiskSnapshot | null; radiusKm: number; }
 
-export interface RTMACData {
-  wellId: string;
-  depthFt: number;
-  rateOfPenetrationFtHr: number;
-  weightOnBitKlbs: number;
-  rotarySpeedRpm: number;
-  mudWeightPpg: number;
-  standpipePressurePsi: number;
-  riskScore: number;      // 0-100
-  riskLevel: RiskLevel;
-  timestamp: string;
+export interface SearchResult {
+  id: string; text: string; score: number; matchedBy: Array<'semantic' | 'keyword'>; source_type: string; page: number | null;
+  formation_name: string | null; depth_ft: number | null; event_type: EventType | null;
+  well: { id: string; name: string; field: string } | null; document: { id: string; title: string } | null;
+  event: { id: string; severity: Severity; outcome_rating: string | null; npt_hours: number | null; mitigation: string | null } | null;
 }
 
-// ─── Knowledge Repository ─────────────────────────────────────────────────────
-
-export interface KnowledgeEntry {
-  id: string;
-  wellId: string;
-  wellName: string;
-  incidentId: string;
-  incidentType: IncidentType;
-  severity: RiskLevel;
-  depthFt: number;
-  formation: string;
-  date: string;
-  shortDescription: string;
-  mitigation: string;
-  lessonsLearned: string;
-  sourceReportId?: string;
-  sourceReportTitle?: string;
-}
-
-// ─── Reports ─────────────────────────────────────────────────────────────────
-
-export interface Report {
-  id: string;
-  title: string;
-  type: 'WCR' | 'DDR' | 'IADC' | 'Other';
-  wellId?: string;
-  uploadedAt: string;
-  status: UploadStatus;
-  fileName: string;
-  fileSizeBytes: number;
-  extractedData?: ExtractedReportData;
-  progress?: number; // 0-100
-}
-
-export interface ExtractedReportData {
-  wellName?: string;
-  depth?: number;
-  formation?: string;
-  incidents: Partial<Incident>[];
-  formations: Partial<Formation>[];
-  confirmed: boolean;
-}
-
-// ─── Threat Matrix ────────────────────────────────────────────────────────────
-
-export interface ThreatMatrixEntry {
-  riskFactor: string;
-  probability: RiskLevel;
-  severity: RiskLevel;
-  confidence: number; // 0-100
-  relatedWellCount: number;
-  description: string;
-}
-
-// ─── App State (for Zustand) ──────────────────────────────────────────────────
-
-export interface AppState {
-  activeWellId: string | null;
-  activeWell: Well | null;
-  liveDepthFt: number;
-  liveRiskScore: number;
-  liveRiskLevel: RiskLevel;
-  liveRtmacData: RTMACData | null;
-  mapRadius: number; // km
-  unreadAlertCount: number;
-  alerts: Alert[];
-  isRTMACConnected: boolean;
+export interface Meta {
+  formations: Array<{ name: string; seq: number; lithology: string; color: string; typicalThicknessFt: number }>;
+  eventTypes: Array<{ key: EventType; label: string }>; riskTypes: RiskType[]; mitigations: Record<string, string>;
+  liveWells: string[]; capabilities: { groq: boolean; groqModel: string | null; embeddings: { model: string; dimension: number; error: string | null } };
+  defaultRadiusKm: number;
 }
