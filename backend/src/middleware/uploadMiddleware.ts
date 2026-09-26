@@ -18,15 +18,25 @@ const storage = multer.diskStorage({
   },
 });
 
+const ALLOWED_EXTS = ['.pdf', '.doc', '.docx', '.txt'];
+const ALLOWED_MIMES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
+  'application/octet-stream',
+];
+
 function fileFilter(
   _req: Express.Request,
   file: Express.Multer.File,
   cb: multer.FileFilterCallback
 ): void {
-  if (file.mimetype === 'application/pdf') {
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (ALLOWED_EXTS.includes(ext) || ALLOWED_MIMES.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error('Only PDF files are accepted'));
+    cb(new Error('Invalid file format. Only PDF, DOC, DOCX, and TXT files are supported.'));
   }
 }
 

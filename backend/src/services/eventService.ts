@@ -25,7 +25,7 @@ export async function listEvents(filters: {
   const offset = (filters.page - 1) * filters.limit;
 
   const events = await query(
-    `SELECT oe.*, w.name AS well_name, wf.formation_name
+    `SELECT oe.*, w.name AS well_name, w.field_name, w.latitude, w.longitude, wf.formation_name
      FROM operational_events oe
      LEFT JOIN wells w ON oe.well_id = w.id
      LEFT JOIN well_formations wf ON oe.formation_id = wf.id
@@ -45,7 +45,7 @@ export async function listEvents(filters: {
 
 export async function getEventById(id: string): Promise<any | null> {
   const event = await queryOne(
-    `SELECT oe.*, w.name AS well_name, wf.formation_name
+    `SELECT oe.*, w.name AS well_name, w.field_name, w.latitude, w.longitude, wf.formation_name
      FROM operational_events oe
      LEFT JOIN wells w ON oe.well_id = w.id
      LEFT JOIN well_formations wf ON oe.formation_id = wf.id

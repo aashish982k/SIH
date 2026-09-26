@@ -1,11 +1,12 @@
 import { Router } from 'express';
-import { getNearbyIntelligence } from '../controllers/intelligenceController';
-import { authenticate } from '../middleware/authMiddleware';
+import { getNearbyIntelligence, getOverviewStats } from '../controllers/intelligenceController';
+import { optionalAuth } from '../middleware/authMiddleware';
 
 const router = Router();
 
-router.use(authenticate);
+router.use(optionalAuth);
 
+router.get('/overview', getOverviewStats);
 router.get('/:wellId/nearby', getNearbyIntelligence);
 
 export default router;

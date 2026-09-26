@@ -1,11 +1,13 @@
 import { Router } from 'express';
-import { getPredictions, getAlerts } from '../controllers/riskController';
-import { authenticate } from '../middleware/authMiddleware';
+import { getPredictions, getAlerts, listAllRisks, getRiskOverview } from '../controllers/riskController';
+import { optionalAuth } from '../middleware/authMiddleware';
 
 const router = Router();
 
-router.use(authenticate);
+router.use(optionalAuth);
 
+router.get('/', listAllRisks);
+router.get('/overview', getRiskOverview);
 router.get('/:wellId/predictions', getPredictions);
 router.get('/:wellId/alerts', getAlerts);
 

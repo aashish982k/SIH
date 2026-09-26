@@ -11,12 +11,10 @@ function RTMACProvider({ children }: { children: React.ReactNode }) {
 }
 
 function AuthHydrator({ children }: { children: React.ReactNode }) {
-  const setIsAdmin = useAppStore(s => s.setIsAdmin);
+  const checkAuth = useAppStore(s => s.checkAuth);
   useEffect(() => {
-    // Rehydrate admin state from localStorage on mount
-    const role = localStorage.getItem('nwis_role');
-    if (role === 'admin') setIsAdmin(true);
-  }, [setIsAdmin]);
+    checkAuth();
+  }, [checkAuth]);
   return <>{children}</>;
 }
 

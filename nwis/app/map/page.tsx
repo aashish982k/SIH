@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { motion } from 'framer-motion';
-import { useAppStore } from '@/store/appStore';
+import { useAppStore, BASIN_FIELD_MAPPING } from '@/store/appStore';
 import { MOCK_WELLS } from '@/lib/mock/wells';
 import { getIncidentsForWell } from '@/lib/mock/incidents';
 import { getDistanceKm, cn, getRiskBgClass, getRiskLabel, getRiskBorderClass, getIncidentLabel, formatDepth, formatDistance } from '@/lib/utils';
@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import {
   MapPin, Sliders, Filter, AlertTriangle, ArrowRight,
-  Layers, Circle, Navigation, Info
+  Layers, Circle, Navigation, Info, Compass
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import type { Well, IncidentType } from '@/lib/types';
@@ -89,36 +89,66 @@ function WellListItem({ well, distance, onClick }: {
 // ─── Map View Page ────────────────────────────────────────────────────────────
 export default function MapPage() {
   const router = useRouter();
-  const { activeWell, mapRadius, setMapRadius, liveDepthFt } = useAppStore();
+  const { 
+    activeWell, 
+    setActiveWell,
+    mapRadius, 
+    setMapRadius, 
+    liveDepthFt, 
+    wells, 
+    fetchWells,
+    selectedBasin,
+    setSelectedBasin
+  } = useAppStore();
 
   const [formationFilter, setFormationFilter] = useState<string>('all');
   const [incidentFilter, setIncidentFilter] = useState<string>('all');
   const [selectedWellId, setSelectedWellId] = useState<string | null>(null);
 
-  // Nearby wells within radius
+  useEffect(() => {
+    fetchWells();
+  }, [fetchWells]);
+
+  const sourceWells = useMemo(() => {
+    return wells.length > 0 ? wells : MOCK_WELLS;
+  }, [wells]);
+
+  const basinConfig = selectedBasin !== 'all' ? BASIN_FIELD_MAPPING[selectedBasin] : null;
+
+  // Nearby wells within basin or radius
   const nearbyWells = useMemo(() => {
     if (!activeWell) return [];
-    return MOCK_WELLS
+    return sourceWells
       .filter(w => w.id !== activeWell.id)
+      .filter(w => {
+        if (!basinConfig) return true;
+        // In specific basin mode: keep wells that match fields or within regional cluster
+        const isFieldMatch = basinConfig.fields.some(f => (w.field || '').toLowerCase().includes(f.toLowerCase()));
+        if (isFieldMatch) return true;
+        const dist = getDistanceKm(activeWell.coordinates.lat, activeWell.coordinates.lng, w.coordinates.lat, w.coordinates.lng);
+        return dist <= 160;
+      })
       .map(w => ({
         ...w,
         distance: getDistanceKm(
           activeWell.coordinates.lat, activeWell.coordinates.lng,
           w.coordinates.lat, w.coordinates.lng
         ),
-        incidents: getIncidentsForWell(w.id),
+        incidents: w.incidents?.length ? w.incidents : getIncidentsForWell(w.id),
       }))
-      .filter(w => w.distance <= mapRadius)
+      .filter(w => {
+        return w.distance <= mapRadius;
+      })
       .filter(w => {
         if (formationFilter === 'all') return true;
-        return w.formations.some(f => f.name.toLowerCase().includes(formationFilter.toLowerCase()));
+        return (w.formations || []).some(f => f.name.toLowerCase().includes(formationFilter.toLowerCase()));
       })
       .filter(w => {
         if (incidentFilter === 'all') return true;
-        return w.incidents.some(i => i.type === incidentFilter);
+        return (w.incidents || []).some(i => i.type === incidentFilter);
       })
       .sort((a, b) => a.distance - b.distance);
-  }, [activeWell, mapRadius, formationFilter, incidentFilter]);
+  }, [activeWell, sourceWells, mapRadius, formationFilter, incidentFilter, selectedBasin, basinConfig]);
 
   const handleWellClick = useCallback((wellId: string) => {
     setSelectedWellId(wellId);
@@ -133,6 +163,37 @@ export default function MapPage() {
 
       {/* ── Map Area (flex-1) ─────────────────────────────────────────── */}
       <div className="flex-1 relative">
+        {/* Floating Basin Quick Switcher Pill Bar */}
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 bg-[#0A1017]/90 border border-white/20 px-2 py-1.5 rounded-xl backdrop-blur-md shadow-2xl flex items-center gap-1.5 overflow-x-auto max-w-[94vw]">
+          <span className="text-[10px] font-mono text-cyan-400 font-bold uppercase tracking-wider px-2 flex items-center gap-1 shrink-0">
+            <Compass className="w-3.5 h-3.5 text-cyan-400" />
+            BASIN:
+          </span>
+          {[
+            { id: 'all', label: 'All Basins' },
+            { id: 'assam', label: 'Upper Assam' },
+            { id: 'rajasthan', label: 'Barmer (RJ)' },
+            { id: 'cambay', label: 'Cambay (GJ)' },
+            { id: 'mumbai', label: 'Mumbai High' },
+            { id: 'tripura', label: 'Tripura Gas' },
+            { id: 'kg', label: 'KG Deepwater' },
+            { id: 'cauvery', label: 'Cauvery' },
+          ].map((b) => (
+            <button
+              key={b.id}
+              onClick={() => setSelectedBasin(b.id)}
+              className={cn(
+                "px-2.5 py-1 rounded-lg text-xs font-mono whitespace-nowrap transition-all cursor-pointer",
+                selectedBasin === b.id
+                  ? "bg-cyan-500 text-black font-bold shadow-md shadow-cyan-500/40"
+                  : "text-white/70 hover:text-white hover:bg-white/10"
+              )}
+            >
+              {b.label}
+            </button>
+          ))}
+        </div>
+
         {activeWell ? (
           <WellMap
             activeWell={activeWell}
@@ -142,6 +203,8 @@ export default function MapPage() {
             onWellClick={handleWellClick}
             onViewDetails={handleViewDetails}
             liveDepthFt={liveDepthFt}
+            onSelectBasin={setSelectedBasin}
+            selectedBasin={selectedBasin}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-muted/20">
@@ -165,36 +228,90 @@ export default function MapPage() {
         <div className="px-4 py-4 border-b border-border">
           <div className="flex items-center justify-between">
             <div>
+              <div className="text-[10px] font-mono text-cyan-500 font-bold uppercase tracking-wider">
+                {selectedBasin !== 'all' ? (BASIN_FIELD_MAPPING[selectedBasin]?.label || 'Selected Basin') : 'All Indian Basins'}
+              </div>
               <h2 className="font-semibold text-foreground">Offset Wells</h2>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {nearbyWells.length} within {mapRadius} km
+                {nearbyWells.length} wells monitored in sector
               </p>
             </div>
-            <Badge variant="outline" className="text-xs">
+            <Badge variant="outline" className="text-xs font-mono">
               <Circle className="w-2 h-2 mr-1 fill-current text-primary" />
-              {mapRadius} km
+              {activeWell?.name || 'Active'}
             </Badge>
           </div>
         </div>
 
         {/* Controls */}
         <div className="px-4 py-4 border-b border-border space-y-4">
-          {/* Radius slider */}
+          {/* Active Reference Location Selector */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Reference Location
+              </Label>
+              {activeWell && (
+                <span className="text-[10px] font-mono text-cyan-400">
+                  {activeWell.coordinates.lat.toFixed(2)}°N, {activeWell.coordinates.lng.toFixed(2)}°E
+                </span>
+              )}
+            </div>
+            <Select 
+              value={activeWell?.id || ''} 
+              onValueChange={(val) => {
+                if (val) setActiveWell(val);
+              }}
+            >
+              <SelectTrigger className="h-8 text-xs font-medium bg-muted/30">
+                <SelectValue placeholder="Select reference well" />
+              </SelectTrigger>
+              <SelectContent className="max-h-60">
+                {sourceWells.map((w) => (
+                  <SelectItem key={w.id} value={w.id} className="text-xs">
+                    {w.name} ({w.field || 'Field'})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Radius selector with quick presets */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 Search Radius
               </Label>
-              <span className="font-mono text-sm font-semibold text-foreground">{mapRadius} km</span>
+              <span className="font-mono text-sm font-semibold text-cyan-400">{mapRadius} km</span>
             </div>
+
+            {/* Quick Presets: 5 km, 10 km, 25 km, 50 km */}
+            <div className="grid grid-cols-4 gap-1.5 mb-2.5">
+              {[5, 10, 25, 50].map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => setMapRadius(preset)}
+                  className={cn(
+                    "px-2 py-1 text-xs font-mono font-medium rounded transition-all border cursor-pointer",
+                    mapRadius === preset
+                      ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/60 shadow-xs"
+                      : "bg-muted/40 text-muted-foreground border-border hover:text-foreground hover:bg-muted"
+                  )}
+                >
+                  {preset} km
+                </button>
+              ))}
+            </div>
+
             <Slider
-              min={2} max={50} step={1}
+              min={2} max={60} step={1}
               value={[mapRadius]}
               onValueChange={(vals) => setMapRadius(Array.isArray(vals) ? (vals[0] as number) : (vals as unknown as number))}
-              className="w-full"
+              className="w-full cursor-pointer"
             />
-            <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
-              <span>2 km</span><span>50 km</span>
+            <div className="flex justify-between text-[10px] text-muted-foreground mt-1 font-mono">
+              <span>2 km</span><span>60 km</span>
             </div>
           </div>
 

@@ -1,7 +1,7 @@
 // ─── Core Domain Types ────────────────────────────────────────────────────────
 
 export type RiskLevel = 'low' | 'medium' | 'high' | 'critical';
-export type IncidentType = 'mud_loss' | 'kick' | 'stuck_pipe' | 'npt' | 'blowout' | 'washout';
+export type IncidentType = 'mud_loss' | 'kick' | 'stuck_pipe' | 'npt' | 'blowout' | 'washout' | 'torque_spike';
 export type WellStatus = 'active' | 'completed' | 'suspended' | 'abandoned';
 export type AlertStatus = 'new' | 'acknowledged' | 'resolved';
 export type UploadStatus = 'queued' | 'processing' | 'extracted' | 'error' | 'saved';

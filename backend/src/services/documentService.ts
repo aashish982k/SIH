@@ -25,10 +25,12 @@ export class DocumentService {
       }
       const doc = (docs as any[])[0];
       
-      const filePath = path.resolve(env.UPLOADS_DIR, doc.file_path);
+      const filePath = path.isAbsolute(doc.file_path)
+        ? doc.file_path
+        : path.resolve(process.cwd(), doc.file_path);
 
       // Update status to processing
-      await query('UPDATE documents SET processing_status = ? WHERE id = ?', ['processing', documentId]);
+      await query('UPDATE documents SET status = ? WHERE id = ?', ['processing', documentId]);
 
       // 2. Extract text
       const rawText = await ocrService.extractText(filePath);
@@ -91,14 +93,14 @@ export class DocumentService {
       }
 
       // 5. Update final status
-      const finalStatus = successfulChunks > 0 ? 'completed' : 'failed';
-      await query('UPDATE documents SET processing_status = ? WHERE id = ?', [finalStatus, documentId]);
+      const finalStatus = successfulChunks > 0 ? 'processed' : 'failed';
+      await query('UPDATE documents SET status = ? WHERE id = ?', [finalStatus, documentId]);
       
       console.log(`Document ${documentId} processed. ${successfulChunks}/${chunks.length} chunks indexed.`);
 
     } catch (error: any) {
       console.error(`Document processing failed for ${documentId}:`, error);
-      await query('UPDATE documents SET processing_status = ? WHERE id = ?', ['failed', documentId]);
+      await query('UPDATE documents SET status = ? WHERE id = ?', ['failed', documentId]);
       throw error;
     }
   }

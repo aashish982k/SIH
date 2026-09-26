@@ -8,22 +8,33 @@ async function setupDatabase(): Promise<void> {
     MYSQL_HOST, MYSQL_PORT, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE,
   } = process.env;
 
-  // Connect without specifying a database first so we can CREATE DATABASE
+  // Connect as root to create database and configure permissions
+  const port = Number(MYSQL_PORT ?? 3307);
   const rootConn = await mysql.createConnection({
     host: MYSQL_HOST ?? 'localhost',
-    port: Number(MYSQL_PORT ?? 3306),
-    user: MYSQL_USER ?? 'root',
-    password: MYSQL_PASSWORD ?? 'secret',
+    port,
+    user: 'root',
+    password: process.env.MYSQL_ROOT_PASSWORD ?? 'secret',
     multipleStatements: true,
   });
 
-  console.log('🔌  Connected to MySQL server');
+  console.log(`🔌  Connected to MySQL server on port ${port}`);
 
   // Create database if it doesn't exist
   await rootConn.execute(
     `CREATE DATABASE IF NOT EXISTS \`${MYSQL_DATABASE ?? 'nwis'}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`
   );
   console.log(`✅  Database "${MYSQL_DATABASE ?? 'nwis'}" ensured`);
+
+  // Grant privileges to application user
+  try {
+    await rootConn.query(
+      `GRANT ALL PRIVILEGES ON \`${MYSQL_DATABASE ?? 'nwis'}\`.* TO '${MYSQL_USER ?? 'nwis_user'}'@'%';`
+    );
+    await rootConn.query('FLUSH PRIVILEGES;');
+  } catch {
+    // User might not exist or grant not needed
+  }
 
   await rootConn.changeUser({ database: MYSQL_DATABASE ?? 'nwis' });
 
@@ -39,6 +50,6 @@ async function setupDatabase(): Promise<void> {
 }
 
 setupDatabase().catch((err) => {
-  console.error('❌  Database setup failed:', err.message);
+  console.error('❌  Database setup failed:', err?.message || err);
   process.exit(1);
 });

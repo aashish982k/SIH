@@ -53,10 +53,12 @@ export async function listWells(filters: {
   return { wells, total };
 }
 
-// ── Get single well with nested formations and recent events ──
+// ── Get single well with nested formations, casings, surveys, and events ──
 export async function getWellById(id: string): Promise<Well & {
   formations: any[];
   recent_events: any[];
+  casing_sections: any[];
+  surveys: any[];
 } | null> {
   const well = await queryOne<Well>('SELECT * FROM wells WHERE id = ?', [id]);
   if (!well) return null;
@@ -67,12 +69,22 @@ export async function getWellById(id: string): Promise<Well & {
   );
 
   const recent_events = await query(
-    `SELECT id, event_type, severity, start_depth_ft, description, occurred_at
+    `SELECT id, well_id, event_type, severity, start_depth_ft, description, mitigation, lessons_learned, npt_hours, occurred_at
      FROM operational_events WHERE well_id = ? ORDER BY occurred_at DESC LIMIT 10`,
     [id]
   );
 
-  return { ...well, formations, recent_events };
+  const casing_sections = await query(
+    'SELECT * FROM casing_sections WHERE well_id = ? ORDER BY shoe_depth_ft',
+    [id]
+  );
+
+  const surveys = await query(
+    'SELECT * FROM well_surveys WHERE well_id = ? ORDER BY measured_depth_ft',
+    [id]
+  );
+
+  return { ...well, formations, recent_events, casing_sections, surveys };
 }
 
 // ── Nearby wells using MySQL Haversine formula ─────────────────

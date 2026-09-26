@@ -29,7 +29,7 @@ import type { Alert } from '@/lib/types';
 
 // ─── Nav Links ────────────────────────────────────────────────────────────────
 const NAV_LINKS = [
-  { href: '/',            label: 'Dashboard',   icon: LayoutDashboard },
+  { href: '/overview',    label: 'Overview',    icon: LayoutDashboard },
   { href: '/map',         label: 'Map View',    icon: Map },
   { href: '/knowledge',   label: 'Knowledge',   icon: BookOpen },
   { href: '/risk',        label: 'Risk & Alerts', icon: AlertTriangle },
@@ -71,8 +71,8 @@ export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const {
-    activeWell, liveDepthFt, liveRiskScore, liveRiskLevel,
-    unreadAlertCount, alerts, isRTMACConnected, isAdmin,
+    activeWell, wells, liveDepthFt, liveRiskScore, liveRiskLevel,
+    unreadAlertCount, alerts, isRTMACConnected, isAdmin, currentUser,
     acknowledgeAlert, markAllRead, setActiveWell, logout
   } = useAppStore();
 
@@ -181,7 +181,7 @@ export default function Navbar() {
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Switch Active Well</p>
                   </div>
                   <DropdownMenuSeparator />
-                  {MOCK_WELLS.filter(w => w.status === 'active').map(well => (
+                  {(wells.length > 0 ? wells : MOCK_WELLS).filter(w => w.status === 'active').map(well => (
                     <DropdownMenuItem
                       key={well.id}
                       onClick={() => setActiveWell(well.id)}
@@ -270,35 +270,37 @@ export default function Navbar() {
               )}>
                 <Avatar className="w-8 h-8">
                     <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
-                      {isAdmin ? 'AD' : 'EG'}
+                      {currentUser?.name ? currentUser.name.slice(0, 2).toUpperCase() : isAdmin ? 'AD' : 'EG'}
                     </AvatarFallback>
                   </Avatar>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <div className="px-2 py-1.5">
-                  <p className="text-sm font-medium">{isAdmin ? 'Administrator' : 'Engineer'}</p>
-                  <p className="text-xs text-muted-foreground">{isAdmin ? 'Oil India Limited' : 'Field Operations'}</p>
+              <DropdownMenuContent align="end" className="w-56">
+                <div className="px-3 py-2 border-b border-border/50">
+                  <p className="text-xs font-semibold text-foreground truncate">
+                    {currentUser?.name || (isAdmin ? 'Administrator' : 'Rahul Sharma')}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground truncate">
+                    {currentUser?.email || 'rahul.sharma@nwis.com'}
+                  </p>
+                  <div className="mt-1">
+                    <Badge variant="outline" className="text-[9px] uppercase font-mono px-1 py-0">
+                      {currentUser?.role || (isAdmin ? 'ADMINISTRATOR' : 'ENGINEER')}
+                    </Badge>
+                  </div>
                 </div>
+                <DropdownMenuItem onClick={() => router.push('/admin')} className="cursor-pointer">
+                  <Settings className="w-3.5 h-3.5 mr-2" />
+                  Admin Panel
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => router.push('/login')} className="cursor-pointer">
+                  <Activity className="w-3.5 h-3.5 mr-2" />
+                  Switch User / Login
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                {!isAdmin && (
-                  <DropdownMenuItem onClick={() => router.push('/login')} className="cursor-pointer">
-                    <Settings className="w-3.5 h-3.5 mr-2" />
-                    Admin Login
-                  </DropdownMenuItem>
-                )}
-                {isAdmin && (
-                  <>
-                    <DropdownMenuItem onClick={() => router.push('/admin')} className="cursor-pointer">
-                      <Settings className="w-3.5 h-3.5 mr-2" />
-                      Admin Panel
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={handleLogout} className="text-destructive cursor-pointer">
-                      <LogOut className="w-3.5 h-3.5 mr-2" />
-                      Sign Out
-                    </DropdownMenuItem>
-                  </>
-                )}
+                <DropdownMenuItem onClick={handleLogout} className="text-destructive cursor-pointer">
+                  <LogOut className="w-3.5 h-3.5 mr-2" />
+                  Sign Out
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 

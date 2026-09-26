@@ -49,24 +49,26 @@ export function getRiskBorderClass(level: RiskLevel): string {
 
 export function getIncidentLabel(type: IncidentType): string {
   const map: Record<IncidentType, string> = {
-    mud_loss:   'Lost Circulation',
-    kick:       'Well Kick',
-    stuck_pipe: 'Stuck Pipe',
-    npt:        'NPT Event',
-    blowout:    'Blowout',
-    washout:    'Washout',
+    mud_loss:     'Lost Circulation',
+    kick:         'Well Kick',
+    stuck_pipe:   'Stuck Pipe',
+    npt:          'NPT Event',
+    blowout:      'Blowout',
+    washout:      'Washout',
+    torque_spike: 'Torque Spike / Bit Balling',
   };
   return map[type] ?? type;
 }
 
 export function getIncidentColor(type: IncidentType): string {
   const map: Record<IncidentType, string> = {
-    mud_loss:   '#2E86AB',
-    kick:       '#DC2626',
-    stuck_pipe: '#D97706',
-    npt:        '#7C3AED',
-    blowout:    '#991B1B',
-    washout:    '#0891B2',
+    mud_loss:     '#2E86AB',
+    kick:         '#DC2626',
+    stuck_pipe:   '#D97706',
+    npt:          '#7C3AED',
+    blowout:      '#991B1B',
+    washout:      '#0891B2',
+    torque_spike: '#EAB308',
   };
   return map[type] ?? '#64748B';
 }
