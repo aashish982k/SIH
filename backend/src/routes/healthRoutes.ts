@@ -7,8 +7,8 @@ const router = Router();
 router.get('/', async (_req: Request, res: Response) => {
   const health: Record<string, string> = { status: 'ok' };
 
-  // Removed complex MySQL check to simplify setup
-  health.mysql = 'assumed connected';
+  // Removed complex Postgres check to simplify setup
+  health.postgres = 'assumed connected';
 
   try {
     await checkQdrantConnection();

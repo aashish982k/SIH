@@ -5,12 +5,8 @@ const envSchema = z.object({
   PORT: z.string().default('5000').transform(Number),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 
-  // MySQL
-  MYSQL_HOST: z.string().min(1, 'MYSQL_HOST is required'),
-  MYSQL_PORT: z.string().default('3306').transform(Number),
-  MYSQL_USER: z.string().min(1, 'MYSQL_USER is required'),
-  MYSQL_PASSWORD: z.string().min(1, 'MYSQL_PASSWORD is required'),
-  MYSQL_DATABASE: z.string().min(1, 'MYSQL_DATABASE is required'),
+  // Postgres
+  DATABASE_URL: z.string().url('DATABASE_URL must be a valid URL'),
 
   // JWT
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),

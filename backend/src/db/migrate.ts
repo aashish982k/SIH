@@ -1,33 +1,25 @@
-/**
- * Drizzle migration runner — executes pending migrations in src/db/migrations/.
- * Run: npx tsx src/db/migrate.ts
- */
-import "dotenv/config";
-import { drizzle } from "drizzle-orm/mysql2";
-import { migrate } from "drizzle-orm/mysql2/migrator";
-import mysql from "mysql2/promise";
+import { drizzle } from 'drizzle-orm/postgres-js';
+import { migrate } from 'drizzle-orm/postgres-js/migrator';
+import postgres from 'postgres';
+import { env } from '../config/env';
+import path from 'path';
 
-async function main() {
-  const connection = await mysql.createConnection({
-    host:     process.env.MYSQL_HOST     ?? "localhost",
-    port:     Number(process.env.MYSQL_PORT ?? 3306),
-    user:     process.env.MYSQL_USER     ?? "root",
-    password: process.env.MYSQL_PASSWORD ?? "",
-    database: process.env.MYSQL_DATABASE ?? "nwis",
-    multipleStatements: true,
-  });
+async function runMigration() {
+  console.log('🔄 Running migrations...');
+  
+  const client = postgres(env.DATABASE_URL, { max: 1 });
+  const db = drizzle(client);
 
-  const db = drizzle(connection);
-
-  console.log("Running migrations...");
-  await migrate(db, { migrationsFolder: "src/db/migrations" });
-  console.log("Migrations complete!");
-
-  await connection.end();
-  process.exit(0);
+  try {
+    const migrationsFolder = path.resolve(process.cwd(), 'drizzle');
+    await migrate(db, { migrationsFolder });
+    console.log('✅ Migrations completed successfully.');
+  } catch (error) {
+    console.error('❌ Migration failed:', error);
+    process.exit(1);
+  } finally {
+    await client.end();
+  }
 }
 
-main().catch((err) => {
-  console.error("Migration failed:", err);
-  process.exit(1);
-});
+runMigration();

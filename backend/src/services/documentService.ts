@@ -259,7 +259,7 @@ export class DocumentService {
               lessons_learned: entities.find(e => e.type === 'lessons_learned')?.value,
               outcome: entities.find(e => e.type === 'outcome')?.value,
               occurred_at: doc.document_date ?? new Date(),
-            }).onDuplicateKeyUpdate({ set: { updated_at: new Date() } });
+            }).onConflictDoNothing();
           }
 
           // In MySQL, we need a unique ID for the chunk record. 

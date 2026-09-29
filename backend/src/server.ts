@@ -7,7 +7,7 @@ import { initWebSocket } from './websocket';
 import { resumePendingDocuments } from './services/documentService';
 
 async function bootstrap(): Promise<void> {
-  // ── MySQL Connection is established implicitly on first query ──
+  // ── PostgreSQL Connection is established implicitly on first query ──
   // ── Verify + setup Qdrant (non-fatal) ─────────────────────────
   console.log('🔌  Connecting to Qdrant...');
   try {
