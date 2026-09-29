@@ -9,6 +9,8 @@ export class ApiError extends Error {
   constructor(message: string, public status: number) { super(message); }
 }
 
+
+
 export async function api<T = any>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
   const token = useApp.getState().token;
   const headers: Record<string, string> = { ...(init.headers as Record<string, string>) };
