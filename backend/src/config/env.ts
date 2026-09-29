@@ -24,6 +24,9 @@ const envSchema = z.object({
   // Groq — document extraction and cited answers
   GROQ_API_KEY: z.string().optional().default(''),
   GROQ_MODEL: z.string().default('openai/gpt-oss-120b'),
+  
+  // Gemini API Key for embeddings
+  GEMINI_API_KEY: z.string().optional().default(''),
 
   // Offset intelligence defaults
   DEFAULT_RADIUS_KM: z.string().default('10').transform(Number),
