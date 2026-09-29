@@ -1,26 +1,21 @@
 services:
-  mysql:
-    image: mysql:8.0
-    container_name: nwis-mysql
+  postgres:
+    image: postgres:15-alpine
+    container_name: nwis-postgres
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-secret}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-nwis}
-      MYSQL_USER: ${MYSQL_USER:-nwis_user}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-nwis_pass}
+      POSTGRES_USER: ${POSTGRES_USER:-nwis_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nwis_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-nwis}
     ports:
-      - "3307:3306"
+      - "5432:5432"
     volumes:
-      - mysql_data:/var/lib/mysql
-    command: >
-      --character-set-server=utf8mb4
-      --collation-server=utf8mb4_unicode_ci
-      --default-authentication-plugin=mysql_native_password
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "--password=${MYSQL_ROOT_PASSWORD:-secret}"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 5
 
   qdrant:
     image: qdrant/qdrant:v1.13.4
@@ -36,5 +31,5 @@ services:
       QDRANT__SERVICE__GRPC_PORT: 6334
 
 volumes:
-  mysql_data:
+  postgres_data:
   qdrant_data:

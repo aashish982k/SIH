@@ -1,5 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
-import { query } from '../config/db';
+import { eq, inArray, sql } from 'drizzle-orm';
+import { db } from '../config/db';
+import { knowledge_chunks, operational_events, wells, documents } from '../db/schema';
 import { env } from '../config/env';
 import { qdrantClient } from '../config/qdrant';
 import { embed, embedOne } from './embeddingService';
@@ -35,16 +37,23 @@ export function eventToText(e: any): string {
   ].filter(Boolean).join(' ');
 }
 
-/** Store chunks in MySQL, then embed and upsert them into Qdrant (best effort). */
+/** Store chunks in PostgreSQL, then embed and upsert them into Qdrant (best effort). */
 export async function indexChunks(chunks: ChunkInput[]): Promise<{ stored: number; embedded: number }> {
   if (!chunks.length) return { stored: 0, embedded: 0 };
   const rows = chunks.map((c) => ({ id: uuidv4(), ...c }));
   for (const r of rows) {
-    await query(
-      `INSERT INTO knowledge_chunks (id, document_id, event_id, well_id, source_type, chunk_text, page, formation_name, depth_ft, event_type)
-       VALUES (?,?,?,?,?,?,?,?,?,?)`,
-      [r.id, r.document_id ?? null, r.event_id ?? null, r.well_id ?? null, r.source_type, r.text, r.page ?? null, r.formation ?? null, r.depth_ft ?? null, r.event_type ?? null]
-    );
+    await db.insert(knowledge_chunks).values({
+      id: r.id,
+      document_id: r.document_id ?? null,
+      event_id: r.event_id ?? null,
+      well_id: r.well_id ?? null,
+      source_type: r.source_type,
+      chunk_text: r.text,
+      page: r.page ?? null,
+      formation_name: r.formation ?? null,
+      depth_ft: r.depth_ft != null ? String(r.depth_ft) : null,
+      event_type: r.event_type ?? null,
+    });
   }
   let embedded = 0;
   try {
@@ -63,7 +72,9 @@ export async function indexChunks(chunks: ChunkInput[]): Promise<{ stored: numbe
           },
         })),
       });
-      await query(`UPDATE knowledge_chunks SET is_embedded = TRUE WHERE id IN (${batch.map(() => '?').join(',')})`, batch.map((b) => b.id));
+      await db.update(knowledge_chunks)
+        .set({ is_embedded: true })
+        .where(inArray(knowledge_chunks.id, batch.map((b) => b.id)));
       embedded += batch.length;
     }
   } catch (err: any) {
@@ -74,32 +85,27 @@ export async function indexChunks(chunks: ChunkInput[]): Promise<{ stored: numbe
 
 export async function indexEvents(eventIds: string[]): Promise<void> {
   if (!eventIds.length) return;
-  const events = await query(
-    `SELECT e.*, w.name AS well_name FROM operational_events e JOIN wells w ON w.id = e.well_id
-     WHERE e.id IN (${eventIds.map(() => '?').join(',')})`, eventIds);
+  const { rows: events } = await db.execute(sql`
+    SELECT e.*, w.name AS well_name
+    FROM operational_events e
+    JOIN wells w ON w.id = e.well_id
+    WHERE e.id = ANY(${eventIds}::uuid[])
+  `) as any;
   await indexChunks(events.map((e: any) => ({
     event_id: e.id, well_id: e.well_id, document_id: e.source_document_id, source_type: 'event' as const,
-    text: eventToText(e), page: e.source_page, formation: e.formation_name, depth_ft: Number(e.depth_md_ft), event_type: e.event_type,
+    text: eventToText(e), page: e.source_page, formation: e.formation_name,
+    depth_ft: Number(e.depth_md_ft), event_type: e.event_type,
   })));
 }
 
 // ── Search ───────────────────────────────────────────────────
-function sqlFilters(f: SearchFilters): { where: string; params: any[] } {
-  const c: string[] = []; const p: any[] = [];
-  if (f.wellIds?.length) { c.push(`kc.well_id IN (${f.wellIds.map(() => '?').join(',')})`); p.push(...f.wellIds); }
-  if (f.formation) { c.push('kc.formation_name = ?'); p.push(f.formation); }
-  if (f.eventType) { c.push('kc.event_type = ?'); p.push(f.eventType); }
-  if (f.depthMin != null) { c.push('kc.depth_ft >= ?'); p.push(f.depthMin); }
-  if (f.depthMax != null) { c.push('kc.depth_ft <= ?'); p.push(f.depthMax); }
-  return { where: c.length ? `AND ${c.join(' AND ')}` : '', params: p };
-}
-
 function qdrantFilter(f: SearchFilters) {
   const must: any[] = [];
   if (f.wellIds?.length) must.push({ key: 'well_id', match: { any: f.wellIds } });
-  if (f.formation) must.push({ key: 'formation', match: { value: f.formation } });
-  if (f.eventType) must.push({ key: 'event_type', match: { value: f.eventType } });
-  if (f.depthMin != null || f.depthMax != null) must.push({ key: 'depth_ft', range: { gte: f.depthMin ?? undefined, lte: f.depthMax ?? undefined } });
+  if (f.formation)  must.push({ key: 'formation',   match: { value: f.formation } });
+  if (f.eventType)  must.push({ key: 'event_type',  match: { value: f.eventType } });
+  if (f.depthMin != null || f.depthMax != null)
+    must.push({ key: 'depth_ft', range: { gte: f.depthMin ?? undefined, lte: f.depthMax ?? undefined } });
   return must.length ? { must } : undefined;
 }
 
@@ -126,35 +132,45 @@ export async function search(q: string, filters: SearchFilters = {}): Promise<{ 
   // Semantic (Qdrant)
   try {
     const vector = await embedOne(q);
-    const res = await qdrantClient.query(env.QDRANT_COLLECTION_NAME, { query: vector, limit: pool, filter: qdrantFilter(filters), with_payload: false });
+    const res = await qdrantClient.query(env.QDRANT_COLLECTION_NAME, {
+      query: vector, limit: pool, filter: qdrantFilter(filters), with_payload: false,
+    });
     res.points.forEach((p, i) => add(String(p.id), i, 'semantic'));
     mode.push('semantic');
   } catch (err: any) {
     console.warn('[search] semantic search unavailable:', err?.message ?? err);
   }
 
-  // Keyword (MySQL full-text) — catches exact jargon like "LCM", "13-3/8", "BCS"
-  const { where, params } = sqlFilters(filters);
-  const kw = await query<{ id: string }>(
-    `SELECT kc.id FROM knowledge_chunks kc
-     WHERE MATCH(kc.chunk_text) AGAINST (? IN NATURAL LANGUAGE MODE) ${where}
-     ORDER BY MATCH(kc.chunk_text) AGAINST (? IN NATURAL LANGUAGE MODE) DESC LIMIT ${pool}`,
-    [q, ...params, q]
-  );
-  kw.forEach((r, i) => add(r.id, i, 'keyword'));
+  // Keyword — PostgreSQL full-text search (tsvector GIN, replaces MySQL FULLTEXT)
+  const wellFilter   = filters.wellIds?.length ? sql`AND kc.well_id = ANY(${filters.wellIds}::uuid[])` : sql``;
+  const fmFilter     = filters.formation ? sql`AND kc.formation_name = ${filters.formation}` : sql``;
+  const evFilter     = filters.eventType ? sql`AND kc.event_type = ${filters.eventType}` : sql``;
+  const dMinFilter   = filters.depthMin != null ? sql`AND kc.depth_ft >= ${filters.depthMin}` : sql``;
+  const dMaxFilter   = filters.depthMax != null ? sql`AND kc.depth_ft <= ${filters.depthMax}` : sql``;
+
+  const { rows: kw } = await db.execute(sql`
+    SELECT kc.id
+    FROM knowledge_chunks kc
+    WHERE kc.chunk_tsv @@ plainto_tsquery('english', ${q})
+      ${wellFilter} ${fmFilter} ${evFilter} ${dMinFilter} ${dMaxFilter}
+    ORDER BY ts_rank(kc.chunk_tsv, plainto_tsquery('english', ${q})) DESC
+    LIMIT ${pool}
+  `) as any;
+  kw.forEach((r: any, i: number) => add(r.id, i, 'keyword'));
   mode.push('keyword');
 
   const top = [...ranks.entries()].sort((a, b) => b[1].score - a[1].score).slice(0, limit);
   if (!top.length) return { results: [], mode };
 
-  const rows = await query(
-    `SELECT kc.*, w.name AS well_name, w.field_name, d.title AS doc_title,
-            e.severity, e.outcome_rating, e.npt_hours, e.mitigation
-     FROM knowledge_chunks kc
-     LEFT JOIN wells w ON w.id = kc.well_id
-     LEFT JOIN documents d ON d.id = kc.document_id
-     LEFT JOIN operational_events e ON e.id = kc.event_id
-     WHERE kc.id IN (${top.map(() => '?').join(',')})`, top.map(([id]) => id));
+  const { rows } = await db.execute(sql`
+    SELECT kc.*, w.name AS well_name, w.field_name, d.title AS doc_title,
+           e.severity, e.outcome_rating, e.npt_hours, e.mitigation
+    FROM knowledge_chunks kc
+    LEFT JOIN wells w ON w.id = kc.well_id
+    LEFT JOIN documents d ON d.id = kc.document_id
+    LEFT JOIN operational_events e ON e.id = kc.event_id
+    WHERE kc.id = ANY(${top.map(([id]) => id)}::uuid[])
+  `) as any;
   const byId = new Map(rows.map((r: any) => [r.id, r]));
   const maxScore = top[0][1].score;
 
@@ -182,7 +198,7 @@ export async function ask(question: string, filters: SearchFilters = {}) {
     return { answer: 'No matching records were found in the offset-well knowledge base for this question and filter set.', sources: [], generated: false };
   }
   if (!groqEnabled()) {
-    return { answer: null, sources: results, generated: false, reason: 'Add GROQ_API_KEY to backend/.env to get a written answer. The matching records are listed below.' };
+    return { answer: null, sources: results, generated: false, reason: 'Add GROQ_API_KEY to backend/.env to get a written answer.' };
   }
   const context = results.map((r, i) =>
     `[${i + 1}] ${r.well?.name ?? 'Unknown well'} | ${r.document?.title ?? 'record'}${r.page ? `, p.${r.page}` : ''}\n${r.text}`

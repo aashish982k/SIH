@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
-import { query } from '../../src/config/db';
+import { db } from '../../src/config/db';
+import { sql } from 'drizzle-orm';
 
 export async function seedUsers(): Promise<void> {
   const users = [
@@ -35,11 +36,11 @@ export async function seedUsers(): Promise<void> {
 
   for (const u of users) {
     const hash = await bcrypt.hash(u.password, 12);
-    await query(
-      `INSERT IGNORE INTO users (id, name, email, password_hash, role)
-       VALUES (?, ?, ?, ?, ?)`,
-      [u.id, u.name, u.email, hash, u.role]
-    );
+    await db.execute(sql`
+      INSERT INTO users (id, name, email, password_hash, role)
+      VALUES (${u.id}, ${u.name}, ${u.email}, ${hash}, ${u.role})
+      ON CONFLICT (id) DO NOTHING
+    `);
   }
 
   console.log(`  ✔ Seeded ${users.length} users`);

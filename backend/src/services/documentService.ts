@@ -1,13 +1,14 @@
 /**
  * Report → knowledge pipeline.
- *   upload → per-page text (PDF text layer, or OCR for images) → chunks indexed for search
- *   → event extraction (Groq JSON, or offline rules) → validation/normalisation
- *   → engineer review queue → confirmed events feed the hazard profile.
+ * upload → per-page text → chunks indexed for search
+ * → event extraction → validation → engineer review queue → confirmed events feed hazard profile.
  */
 import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import { query, queryOne } from '../config/db';
+import { eq, sql, count } from 'drizzle-orm';
+import { db } from '../config/db';
+import { documents, wells, users, extraction_items, operational_events, knowledge_chunks } from '../db/schema';
 import { env } from '../config/env';
 import { classifyEvent, classifyMitigation, EVENT_TYPES, type EventType } from '../domain/taxonomy';
 import { matchFormation } from '../domain/stratigraphy';
@@ -18,18 +19,28 @@ import { getSurveys } from './wellService';
 import { invalidateHazardCache } from './offsetService';
 
 // ── Upload ───────────────────────────────────────────────────
-export async function createDocument(file: Express.Multer.File, userId: string, body: { well_id?: string; document_type?: string; title?: string }) {
+export async function createDocument(
+  file: Express.Multer.File,
+  userId: string,
+  body: { well_id?: string; document_type?: string; title?: string }
+) {
   const id = uuidv4();
-  await query(
-    `INSERT INTO documents (id, well_id, uploaded_by, document_type, title, file_name, file_path, file_size_bytes, status)
-     VALUES (?,?,?,?,?,?,?,?, 'uploaded')`,
-    [id, body.well_id || null, userId, body.document_type || 'other', body.title || file.originalname.replace(/\.[^.]+$/, ''), file.originalname, path.basename(file.path), file.size]
-  );
+  await db.insert(documents).values({
+    id,
+    well_id: body.well_id || null,
+    uploaded_by: userId,
+    document_type: (body.document_type as any) || 'other',
+    title: body.title || file.originalname.replace(/\.[^.]+$/, ''),
+    file_name: file.originalname,
+    file_path: path.basename(file.path),
+    file_size_bytes: file.size,
+    status: 'uploaded',
+  });
   enqueue(id);
   return getDocument(id);
 }
 
-// Single-worker in-process queue keeps the demo laptop responsive
+// Single-worker queue
 const queue: string[] = [];
 let busy = false;
 function enqueue(id: string) { queue.push(id); void drain(); }
@@ -40,7 +51,9 @@ async function drain() {
     const id = queue.shift()!;
     try { await processDocument(id); } catch (err: any) {
       console.error(`[documents] ${id} failed:`, err);
-      await query(`UPDATE documents SET status = 'failed', error_message = ? WHERE id = ?`, [String(err?.message ?? err).slice(0, 1000), id]);
+      await db.update(documents)
+        .set({ status: 'failed', error_message: String(err?.message ?? err).slice(0, 1000) })
+        .where(eq(documents.id, id));
     }
   }
   busy = false;
@@ -65,30 +78,30 @@ async function readPages(filePath: string): Promise<Array<{ page: number; text: 
 }
 
 async function processDocument(id: string) {
-  const doc = await queryOne(`SELECT * FROM documents WHERE id = ?`, [id]);
+  const [doc] = await db.select().from(documents).where(eq(documents.id, id)).limit(1);
   if (!doc) return;
-  await query(`UPDATE documents SET status = 'processing', error_message = NULL WHERE id = ?`, [id]);
-  const pages = (await readPages(path.resolve(env.UPLOADS_DIR, doc.file_path))).filter((p) => p.text.trim());
-  if (!pages.length) throw new Error('No readable text found. If this is a scanned PDF, upload the pages as PNG/JPG images so OCR can read them.');
-  await query(`UPDATE documents SET page_count = ? WHERE id = ?`, [pages.length, id]);
+  await db.update(documents).set({ status: 'processing', error_message: null }).where(eq(documents.id, id));
+  const pages = (await readPages(path.resolve(env.UPLOADS_DIR, doc.file_path!))).filter((p) => p.text.trim());
+  if (!pages.length) throw new Error('No readable text found. If this is a scanned PDF, upload as PNG/JPG.');
+  await db.update(documents).set({ page_count: pages.length }).where(eq(documents.id, id));
 
-  // Resolve the well: chosen at upload, or named in the report
   let wellId: string | null = doc.well_id;
   if (!wellId) {
-    const wells = await query<{ id: string; name: string }>(`SELECT id, name FROM wells`);
+    const allWells = await db.select({ id: wells.id, name: wells.name }).from(wells);
     const all = pages.map((p) => p.text).join('\n');
-    const found = wells.find((w) => new RegExp(`\\b${w.name.replace('-', '[- ]?')}\\b`, 'i').test(all));
-    if (found) { wellId = found.id; await query(`UPDATE documents SET well_id = ? WHERE id = ?`, [wellId, id]); }
+    const found = allWells.find((w) => new RegExp(`\\b${w.name.replace('-', '[- ]?')}\\b`, 'i').test(all));
+    if (found) {
+      wellId = found.id;
+      await db.update(documents).set({ well_id: wellId }).where(eq(documents.id, id));
+    }
   }
 
-  // Searchable chunks (one or two per page)
   const chunks = pages.flatMap((p) => splitText(p.text, 1400).map((t) => ({ page: p.page, text: t })));
   await indexChunks(chunks.map((c) => ({
     document_id: id, well_id: wellId, source_type: 'document' as const, text: c.text, page: c.page,
     formation: matchFormation(c.text), event_type: classifyEvent(c.text),
   })));
 
-  // Extraction
   let items: ExtractedEvent[] = [];
   let method = 'rules';
   if (groqEnabled()) {
@@ -101,13 +114,23 @@ async function processDocument(id: string) {
   for (const it of items) {
     const norm = normalise(it);
     if (!norm) continue;
-    await query(
-      `INSERT INTO extraction_items (id, document_id, item_type, payload, confidence, source_page, source_quote) VALUES (?,?, 'event', ?,?,?,?)`,
-      [uuidv4(), id, JSON.stringify(norm.payload), norm.confidence.toFixed(3), it.page ?? null, (it.quote ?? '').slice(0, 1000)]
-    );
+    await db.insert(extraction_items).values({
+      id: uuidv4(),
+      document_id: id,
+      item_type: 'event',
+      payload: norm.payload,
+      confidence: String(norm.confidence.toFixed(3)),
+      source_page: it.page ?? null,
+      source_quote: (it.quote ?? '').slice(0, 1000) || null,
+    });
   }
-  const pending = await queryOne<{ n: number }>(`SELECT COUNT(*) AS n FROM extraction_items WHERE document_id = ? AND status = 'pending'`, [id]);
-  await query(`UPDATE documents SET status = ?, extraction_method = ? WHERE id = ?`, [Number(pending?.n) ? 'review' : 'processed', method, id]);
+
+  const [pending] = await db.select({ n: count() })
+    .from(extraction_items)
+    .where(sql`document_id = ${id} AND status = 'pending'`);
+  await db.update(documents)
+    .set({ status: Number(pending?.n) ? 'review' : 'processed', extraction_method: method })
+    .where(eq(documents.id, id));
 }
 
 function splitText(text: string, max: number): string[] {
@@ -134,8 +157,8 @@ Return JSON: {"events":[{"event_type": one of ${EVENT_TYPES.filter((t) => t !== 
 "depth": number, "depth_unit": "m"|"ft", "formation": string|null, "description": string (one sentence, what happened),
 "cause": string|null, "mitigation": string|null (what the crew did), "outcome": string|null (did it work),
 "npt_hours": number|null, "page": number, "quote": string (exact sentence from the page, max 300 chars), "confidence": 0..1}]}
-Rules: only real problems that happened (not plans or generic procedures). One entry per distinct problem.
-Use the depth where it happened. Copy numbers exactly. If nothing qualifies return {"events":[]}.`;
+Rules: only real problems that happened. One entry per distinct problem. Use the depth where it happened.
+Copy numbers exactly. If nothing qualifies return {"events":[]}.`;
 
 async function extractWithGroq(pages: Array<{ page: number; text: string }>): Promise<ExtractedEvent[]> {
   const batches: string[] = []; let cur = '';
@@ -157,7 +180,6 @@ const DEPTH_RE = /(\d{1,2}[,.]?\d{3}(?:\.\d+)?|\d{3,4}(?:\.\d+)?)\s*(m|mtrs?|met
 export function extractWithRules(pages: Array<{ page: number; text: string }>): ExtractedEvent[] {
   const out: ExtractedEvent[] = [];
   for (const p of pages) {
-    // Drop heading-only lines ("2. Drilling complications") so they do not glue onto sentences
     const body = p.text.split(/\n/).filter((l) => /[.;:]\s*$|[.;]\s/.test(l) || l.trim().split(/\s+/).length > 6).join(' ');
     const sentences = body.replace(/\s+/g, ' ').split(/(?<=[.;])\s+(?=[A-Z0-9])/);
     for (let i = 0; i < sentences.length; i++) {
@@ -172,18 +194,18 @@ export function extractWithRules(pages: Array<{ page: number; text: string }>): 
       const npt = ctx.match(/(\d+(?:\.\d+)?)\s*(?:hrs?|hours)\s*(?:of\s*)?(?:npt|non[- ]productive)/i) ?? ctx.match(/npt[^0-9]{0,15}(\d+(?:\.\d+)?)/i);
       out.push({
         event_type: type, depth: dm[1], depth_unit: dm[2], formation: matchFormation(ctx),
-        description: s.trim().slice(0, 400), mitigation, outcome, npt_hours: npt ? Number(npt[1]) : null,
-        page: p.page, quote: s.trim().slice(0, 300), confidence: 0.55,
+        description: s.trim().slice(0, 400), mitigation, outcome,
+        npt_hours: npt ? Number(npt[1]) : null, page: p.page, quote: s.trim().slice(0, 300), confidence: 0.55,
       });
     }
   }
-  // Collapse duplicates of the same problem at the same depth
   const seen = new Set<string>();
   return out.filter((e) => { const k = `${e.event_type}|${e.depth}`; if (seen.has(k)) return false; seen.add(k); return true; });
 }
 
 function normalise(it: ExtractedEvent) {
-  const type = (EVENT_TYPES as readonly string[]).includes(String(it.event_type)) ? (it.event_type as EventType) : classifyEvent(`${it.event_type} ${it.description}`);
+  const type = (EVENT_TYPES as readonly string[]).includes(String(it.event_type))
+    ? (it.event_type as EventType) : classifyEvent(`${it.event_type} ${it.description}`);
   if (!type) return null;
   const raw = typeof it.depth === 'string' ? Number(it.depth.replace(/,/g, '')) : Number(it.depth);
   if (!raw || !isFinite(raw)) return null;
@@ -199,9 +221,10 @@ function normalise(it: ExtractedEvent) {
     payload: {
       event_type: type, depth_md_ft: Math.round(depthFt * 10) / 10, depth_tvd_ft: null,
       depth_as_reported: `${raw} ${unit}`, formation_name: formation,
-      description: (it.description ?? it.quote ?? '').slice(0, 600), cause: it.cause ?? null, mitigation: it.mitigation ?? null,
-      mitigation_key: classifyMitigation(it.mitigation), outcome: it.outcome ?? null,
-      outcome_rating: rateOutcome(it.outcome), npt_hours: it.npt_hours ?? null, severity: severityFor(it.npt_hours ?? null, type),
+      description: (it.description ?? it.quote ?? '').slice(0, 600), cause: it.cause ?? null,
+      mitigation: it.mitigation ?? null, mitigation_key: classifyMitigation(it.mitigation),
+      outcome: it.outcome ?? null, outcome_rating: rateOutcome(it.outcome),
+      npt_hours: it.npt_hours ?? null, severity: severityFor(it.npt_hours ?? null, type),
     },
   };
 }
@@ -220,59 +243,113 @@ function severityFor(npt: number | null, type: string) {
 
 // ── Review ───────────────────────────────────────────────────
 export async function listDocuments() {
-  return query(
-    `SELECT d.id, d.title, d.file_name, d.document_type, d.status, d.page_count, d.extraction_method, d.error_message, d.created_at, d.file_size_bytes,
-            d.well_id, w.name AS well_name, u.name AS uploaded_by_name,
-            SUM(x.status = 'pending') AS pending, SUM(x.status = 'confirmed') AS confirmed, SUM(x.status = 'rejected') AS rejected
-     FROM documents d LEFT JOIN wells w ON w.id = d.well_id LEFT JOIN users u ON u.id = d.uploaded_by
-     LEFT JOIN extraction_items x ON x.document_id = d.id
-     WHERE d.file_path IS NOT NULL
-     GROUP BY d.id ORDER BY d.created_at DESC`
-  );
+  const { rows } = await db.execute(sql`
+    SELECT d.id, d.title, d.file_name, d.document_type, d.status, d.page_count,
+           d.extraction_method, d.error_message, d.created_at, d.file_size_bytes,
+           d.well_id, w.name AS well_name, u.name AS uploaded_by_name,
+           SUM(CASE WHEN x.status = 'pending'   THEN 1 ELSE 0 END) AS pending,
+           SUM(CASE WHEN x.status = 'confirmed' THEN 1 ELSE 0 END) AS confirmed,
+           SUM(CASE WHEN x.status = 'rejected'  THEN 1 ELSE 0 END) AS rejected
+    FROM documents d
+    LEFT JOIN wells w ON w.id = d.well_id
+    LEFT JOIN users u ON u.id = d.uploaded_by
+    LEFT JOIN extraction_items x ON x.document_id = d.id
+    WHERE d.file_path IS NOT NULL
+    GROUP BY d.id, w.name, u.name
+    ORDER BY d.created_at DESC
+  `) as any;
+  return rows;
 }
 
 export async function getDocument(id: string) {
-  const d = await queryOne(`SELECT d.*, w.name AS well_name FROM documents d LEFT JOIN wells w ON w.id = d.well_id WHERE d.id = ?`, [id]);
+  const { rows } = await db.execute(sql`
+    SELECT d.*, w.name AS well_name
+    FROM documents d
+    LEFT JOIN wells w ON w.id = d.well_id
+    WHERE d.id = ${id}
+    LIMIT 1
+  `) as any;
+  const d = rows[0];
   if (!d) return null;
-  const items = await query(`SELECT * FROM extraction_items WHERE document_id = ? ORDER BY source_page, created_at`, [id]);
+  const items = await db.select().from(extraction_items)
+    .where(eq(extraction_items.document_id, id));
   return {
     ...d,
-    items: items.map((x: any) => ({ ...x, payload: typeof x.payload === 'string' ? JSON.parse(x.payload) : x.payload, confidence: Number(x.confidence) })),
+    items: items.map((x) => ({
+      ...x,
+      payload: x.payload,  // JSONB returned as object by pg
+      confidence: Number(x.confidence),
+    })),
   };
 }
 
-export async function reviewItem(itemId: string, userId: string, action: 'confirm' | 'reject', edits?: Record<string, any>) {
-  const item = await queryOne(`SELECT x.*, d.well_id, d.id AS doc_id FROM extraction_items x JOIN documents d ON d.id = x.document_id WHERE x.id = ?`, [itemId]);
+export async function reviewItem(
+  itemId: string, userId: string, action: 'confirm' | 'reject', edits?: Record<string, any>
+) {
+  const { rows } = await db.execute(sql`
+    SELECT x.*, d.well_id, d.id AS doc_id
+    FROM extraction_items x
+    JOIN documents d ON d.id = x.document_id
+    WHERE x.id = ${itemId}
+    LIMIT 1
+  `) as any;
+  const item = rows[0];
   if (!item) throw Object.assign(new Error('Item not found'), { statusCode: 404 });
   if (item.status !== 'pending') throw Object.assign(new Error('Item was already reviewed'), { statusCode: 409 });
+
   if (action === 'reject') {
-    await query(`UPDATE extraction_items SET status = 'rejected', reviewed_by = ?, reviewed_at = UTC_TIMESTAMP() WHERE id = ?`, [userId, itemId]);
+    await db.update(extraction_items)
+      .set({ status: 'rejected', reviewed_by: userId, reviewed_at: new Date() })
+      .where(eq(extraction_items.id, itemId));
   } else {
     const wellId = edits?.well_id ?? item.well_id;
     if (!wellId) throw Object.assign(new Error('Choose which well this report belongs to before confirming events.'), { statusCode: 400 });
-    const p = { ...(typeof item.payload === 'string' ? JSON.parse(item.payload) : item.payload), ...(edits ?? {}) };
+    const p = { ...(item.payload ?? {}), ...(edits ?? {}) };
     if (!(EVENT_TYPES as readonly string[]).includes(p.event_type)) throw Object.assign(new Error('Unknown event type'), { statusCode: 400 });
     const surveys = (await getSurveys([wellId])).get(wellId) ?? [];
     const md = Number(p.depth_md_ft);
     const tvd = surveys.length ? tvdAt(surveys, md) : md;
     const eventId = uuidv4();
-    await query(
-      `INSERT INTO operational_events (id, well_id, formation_name, event_type, severity, depth_md_ft, depth_tvd_ft, description, cause, mitigation, mitigation_key,
-         outcome, outcome_rating, npt_hours, source_document_id, source_page, verified)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,TRUE)`,
-      [eventId, wellId, p.formation_name ?? null, p.event_type, p.severity ?? 'medium', md, tvd, p.description, p.cause ?? null, p.mitigation ?? null,
-        p.mitigation_key ?? classifyMitigation(p.mitigation), p.outcome ?? null, p.outcome_rating ?? rateOutcome(p.outcome), p.npt_hours ?? null, item.doc_id, item.source_page]
-    );
-    await query(`UPDATE extraction_items SET status = 'confirmed', created_event_id = ?, payload = ?, reviewed_by = ?, reviewed_at = UTC_TIMESTAMP() WHERE id = ?`,
-      [eventId, JSON.stringify(p), userId, itemId]);
-    if (p.npt_hours) await query(`UPDATE wells SET total_npt_hours = total_npt_hours + ? WHERE id = ?`, [p.npt_hours, wellId]);
+    await db.insert(operational_events).values({
+      id: eventId,
+      well_id: wellId,
+      formation_name: p.formation_name ?? null,
+      event_type: p.event_type,
+      severity: (p.severity ?? 'medium') as any,
+      depth_md_ft: String(md),
+      depth_tvd_ft: String(tvd),
+      description: p.description,
+      cause: p.cause ?? null,
+      mitigation: p.mitigation ?? null,
+      mitigation_key: p.mitigation_key ?? classifyMitigation(p.mitigation),
+      outcome: p.outcome ?? null,
+      outcome_rating: (p.outcome_rating ?? rateOutcome(p.outcome)) as any,
+      npt_hours: p.npt_hours != null ? String(p.npt_hours) : null,
+      source_document_id: item.doc_id,
+      source_page: item.source_page,
+      verified: true,
+    });
+    await db.update(extraction_items)
+      .set({ status: 'confirmed', created_event_id: eventId, payload: p, reviewed_by: userId, reviewed_at: new Date() })
+      .where(eq(extraction_items.id, itemId));
+    if (p.npt_hours) {
+      await db.execute(sql`
+        UPDATE wells SET total_npt_hours = total_npt_hours + ${p.npt_hours}
+        WHERE id = ${wellId}
+      `);
+    }
     await indexEvents([eventId]);
     invalidateHazardCache();
     const { invalidateLiveProfiles } = await import('./live/liveEngine');
     invalidateLiveProfiles();
   }
-  const left = await queryOne<{ n: number }>(`SELECT COUNT(*) AS n FROM extraction_items WHERE document_id = ? AND status = 'pending'`, [item.doc_id]);
-  if (!Number(left?.n)) await query(`UPDATE documents SET status = 'processed' WHERE id = ?`, [item.doc_id]);
+
+  const [leftRow] = await db.select({ n: count() })
+    .from(extraction_items)
+    .where(sql`document_id = ${item.doc_id} AND status = 'pending'`);
+  if (!Number(leftRow?.n)) {
+    await db.update(documents).set({ status: 'processed' }).where(eq(documents.id, item.doc_id));
+  }
   return getDocument(item.doc_id);
 }
 
@@ -287,7 +364,6 @@ function tvdAt(stations: any[], md: number) {
 }
 
 export async function setDocumentWell(id: string, wellId: string) {
-  await query(`UPDATE documents SET well_id = ? WHERE id = ?`, [wellId, id]);
+  await db.update(documents).set({ well_id: wellId }).where(eq(documents.id, id));
   return getDocument(id);
 }
-

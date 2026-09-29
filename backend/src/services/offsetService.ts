@@ -1,10 +1,13 @@
 /**
  * Offset-well intelligence (Layer A).
+ * Spatial proximity uses a pure Haversine SQL formula — no PostGIS required.
  *  - Offset selection measured along each wellbore at the same formation, not just at surface.
  *  - Hazard profile: for every depth bin of the active well, the distance-weighted share of
  *    offset wells that had each problem at the formation-equivalent depth.
  */
-import { query, queryOne } from '../config/db';
+import { eq, ne, sql } from 'drizzle-orm';
+import { db } from '../config/db';
+import { wells, operational_events } from '../db/schema';
 import { env } from '../config/env';
 import { haversineKm, offsetLatLon, positionAtMd, type Position } from '../domain/geo';
 import { FORMATIONS } from '../domain/stratigraphy';
@@ -12,9 +15,9 @@ import { RISK_TYPES, EVENT_LABELS, MITIGATIONS, type RiskType } from '../domain/
 import { getEvents, getFormations, getSurveys, normalizeWell } from './wellService';
 
 const BIN_FT = 25;
-const KERNEL_FT = 90;         // how far an offset event “spreads” in equivalent depth
-const ALPHA = 0.8;            // Bayesian smoothing weight (in “wells”)
-const BASE_RATE = 0.03;       // prior per bin when there is no offset evidence
+const KERNEL_FT = 90;
+const ALPHA = 0.8;
+const BASE_RATE = 0.03;
 export const ZONE_THRESHOLD = 0.3;
 
 type Formation = { name: string; seq: number; topMd: number; bottomMd: number | null; topTvd: number; bottomTvd: number | null; color: string; predicted: boolean; lithology: string };
@@ -25,19 +28,42 @@ function thickness(f: Formation): number | null {
 
 // ── Offsets ──────────────────────────────────────────────────
 export async function getOffsets(wellId: string, radiusKm = env.DEFAULT_RADIUS_KM) {
-  const active = await queryOne(`SELECT * FROM wells WHERE id = ?`, [wellId]);
+  const [active] = await db.select().from(wells).where(eq(wells.id, wellId)).limit(1);
   if (!active) throw Object.assign(new Error('Well not found'), { statusCode: 404 });
   const lat = Number(active.latitude), lon = Number(active.longitude);
+  const slackKm = radiusKm + 3;
 
-  // Surface pre-filter with the spatial index; 3 km slack for deviated wells
-  const candidates = await query(
-    `SELECT w.*, ST_Distance_Sphere(w.location, ST_GeomFromText(?, 4326)) / 1000 AS surface_km
-     FROM wells w WHERE w.id <> ? AND w.status <> 'drilling'
-       AND ST_Distance_Sphere(w.location, ST_GeomFromText(?, 4326)) <= ?`,
-    [`POINT(${lat} ${lon})`, wellId, `POINT(${lat} ${lon})`, (radiusKm + 3) * 1000]
-  );
+  /**
+   * Pure-SQL Haversine distance (metres) — works with standard PostgreSQL, no PostGIS.
+   * Formula: 2R * asin( sqrt( sin²(Δlat/2) + cos(lat1)*cos(lat2)*sin²(Δlon/2) ) )
+   */
+  const { rows: candidates } = await db.execute(sql`
+    SELECT w.*,
+      6371000 * 2 * asin(
+        sqrt(
+          power(sin(radians((${lat} - CAST(w.latitude AS DOUBLE PRECISION)) / 2)), 2) +
+          cos(radians(${lat})) *
+          cos(radians(CAST(w.latitude AS DOUBLE PRECISION))) *
+          power(sin(radians((${lon} - CAST(w.longitude AS DOUBLE PRECISION)) / 2)), 2)
+        )
+      ) / 1000 AS surface_km
+    FROM wells w
+    WHERE w.id <> ${wellId}
+      AND w.status <> 'drilling'
+      AND 6371000 * 2 * asin(
+            sqrt(
+              power(sin(radians((${lat} - CAST(w.latitude AS DOUBLE PRECISION)) / 2)), 2) +
+              cos(radians(${lat})) *
+              cos(radians(CAST(w.latitude AS DOUBLE PRECISION))) *
+              power(sin(radians((${lon} - CAST(w.longitude AS DOUBLE PRECISION)) / 2)), 2)
+            )
+          ) / 1000 <= ${slackKm}
+  `) as any;
+
   const ids = candidates.map((c: any) => c.id);
-  const [fmMap, svMap, activeFm, activeSv] = await Promise.all([getFormations(ids), getSurveys(ids), getFormations([wellId]), getSurveys([wellId])]);
+  const [fmMap, svMap, activeFm, activeSv] = await Promise.all([
+    getFormations(ids), getSurveys(ids), getFormations([wellId]), getSurveys([wellId]),
+  ]);
   const aFormations: Formation[] = activeFm.get(wellId) ?? [];
   const aStations: Position[] = activeSv.get(wellId) ?? [];
 
@@ -96,9 +122,8 @@ export async function getHazardProfile(wellId: string, radiusKm = env.DEFAULT_RA
   const td = active.plannedTdFt ?? active.totalDepthFt ?? (aFm.length ? (aFm[aFm.length - 1].bottomTvd ?? 12000) : 12000);
   const sigma = Math.max(1.5, radiusKm * 0.55);
 
-  // Pre-compute per offset: weight per formation, events with relative position
   const offsetInfo = offsets.map((o) => {
-    const evs = events.filter((e) => e.wellId === o.id).map((e) => {
+    const evs = events.filter((e: any) => e.wellId === o.id).map((e: any) => {
       const f: Formation | undefined = o.formations.find((ff: Formation) => ff.name === e.formation);
       const th = f ? thickness(f) : null;
       return { ...e, rel: f && th ? (e.depthTvd - f.topTvd) / th : null };
@@ -118,7 +143,6 @@ export async function getHazardProfile(wellId: string, radiusKm = env.DEFAULT_RA
       const of: Formation | undefined = o.formations.find((ff: Formation) => ff.name === f.name);
       const oth = of ? thickness(of) : null;
       if (!of || !oth) continue;
-      // Only wells that actually drilled this equivalent depth count as evidence
       const equivTvd = of.topTvd + rel * oth;
       const reachedTvd = o.formations[o.formations.length - 1]?.bottomTvd ?? 0;
       if (equivTvd > reachedTvd) continue;
@@ -139,7 +163,6 @@ export async function getHazardProfile(wellId: string, radiusKm = env.DEFAULT_RA
     bins.push({ depth: z, formation: f.name, rel, p, wells: Math.round(sumW * 10) / 10 });
   }
 
-  // Zones: contiguous bins above threshold, with the evidence behind them
   const zones: any[] = [];
   for (const k of RISK_TYPES) {
     let start = -1;
@@ -151,7 +174,7 @@ export async function getHazardProfile(wellId: string, radiusKm = env.DEFAULT_RA
         const peak = seg.reduce((m, b) => (b.p[k] > m.p[k] ? b : m), seg[0]);
         const fName = peak.formation!;
         const af = aFm.find((x) => x.name === fName)!;
-        const relTop = (seg[0].depth - af.topTvd) / ((af.bottomTvd ?? af.topTvd + 1) - af.topTvd);
+        const relTop  = (seg[0].depth - af.topTvd) / ((af.bottomTvd ?? af.topTvd + 1) - af.topTvd);
         const relBase = (seg[seg.length - 1].depth + BIN_FT - af.topTvd) / ((af.bottomTvd ?? af.topTvd + 1) - af.topTvd);
         const penetrated = new Set<string>(), withEvent = new Set<string>();
         const evidence: any[] = [];
@@ -171,7 +194,8 @@ export async function getHazardProfile(wellId: string, radiusKm = env.DEFAULT_RA
         zones.push({
           id: `${k}:${seg[0].depth}`, type: k, label: EVENT_LABELS[k], formation: fName,
           topFt: seg[0].depth, baseFt: seg[seg.length - 1].depth + BIN_FT, peakFt: peak.depth,
-          peakProbability: peak.p[k], offsetsWithEvent: withEvent.size, offsetsPenetrated: Math.max(penetrated.size, withEvent.size),
+          peakProbability: peak.p[k], offsetsWithEvent: withEvent.size,
+          offsetsPenetrated: Math.max(penetrated.size, withEvent.size),
           evidence: evidence.slice(0, 8),
           nptHours: Math.round(evidence.reduce((s, e) => s + (e.nptHours ?? 0), 0) * 10) / 10,
         });
@@ -184,8 +208,7 @@ export async function getHazardProfile(wellId: string, radiusKm = env.DEFAULT_RA
   const value = {
     wellId, radiusKm, binFt: BIN_FT, sigmaKm: Math.round(sigma * 10) / 10,
     offsets: offsets.map(({ formations, path, ...o }) => o),
-    formations: aFm,
-    bins, zones,
+    formations: aFm, bins, zones,
     method: 'Distance-weighted, formation-aligned offset frequency with Bayesian smoothing',
   };
   cache.set(key, { at: Date.now(), value });
@@ -194,15 +217,28 @@ export async function getHazardProfile(wellId: string, radiusKm = env.DEFAULT_RA
 
 // ── What worked before ───────────────────────────────────────
 export async function whatWorked(type: string, formation: string | null, offsetIds: string[]) {
-  const scoped = async (ids: string[] | null) => {
-    const c: string[] = ['e.event_type = ?', 'e.mitigation_key IS NOT NULL']; const p: any[] = [type];
-    if (formation) { c.push('e.formation_name = ?'); p.push(formation); }
-    if (ids) { if (!ids.length) return []; c.push(`e.well_id IN (${ids.map(() => '?').join(',')})`); p.push(...ids); }
-    return query(`SELECT e.*, w.name AS well_name FROM operational_events e JOIN wells w ON w.id = e.well_id WHERE ${c.join(' AND ')}`, p);
+  const buildQuery = async (ids: string[] | null) => {
+    const fmClause    = formation ? sql`AND e.formation_name = ${formation}` : sql``;
+    const idsClause   = ids
+      ? ids.length === 0
+        ? sql`AND FALSE`
+        : sql`AND e.well_id = ANY(${ids}::uuid[])`
+      : sql``;
+    const { rows } = await db.execute(sql`
+      SELECT e.*, w.name AS well_name
+      FROM operational_events e
+      JOIN wells w ON w.id = e.well_id
+      WHERE e.event_type = ${type}
+        AND e.mitigation_key IS NOT NULL
+        ${fmClause}
+        ${idsClause}
+    `) as any;
+    return rows;
   };
-  let rows: any[] = await scoped(offsetIds);
+
+  let rows: any[] = await buildQuery(offsetIds);
   let scope = 'offset wells';
-  if (rows.length < 3) { rows = await scoped(null); scope = 'all wells in the database'; }
+  if (rows.length < 3) { rows = await buildQuery(null); scope = 'all wells in the database'; }
 
   const groups = new Map<string, any[]>();
   for (const r of rows) groups.set(r.mitigation_key, [...(groups.get(r.mitigation_key) ?? []), r]);

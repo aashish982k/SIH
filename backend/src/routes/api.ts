@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { authenticate, AuthRequest } from '../middleware/authMiddleware';
 import { upload } from '../middleware/uploadMiddleware';
 import { sendSuccess, sendError } from '../utils/response';
-import { query } from '../config/db';
+import { db } from '../config/db';
+import { sql } from 'drizzle-orm';
 import { env } from '../config/env';
 import { FORMATIONS } from '../domain/stratigraphy';
 import { EVENT_LABELS, MITIGATIONS, RISK_TYPES } from '../domain/taxonomy';
@@ -70,26 +71,30 @@ router.get('/wells/:id/correlation', ah(async (req, res) => {
     columns: [off.active, ...chosen].map((w: any) => ({
       id: w.id, name: w.name, field: w.field, status: w.status, profile: w.profile,
       distanceKm: w.nearestDistanceKm ?? 0, totalDepthFt: w.totalDepthFt ?? w.plannedTdFt, currentDepthFt: w.currentDepthFt,
-      formations: fm.get(w.id) ?? [], events: evs.filter((e) => e.wellId === w.id),
+      formations: fm.get(w.id) ?? [], events: evs.filter((e: any) => e.wellId === w.id),
     })),
   });
 }));
 
 router.get('/wells/:id/parameters', ah(async (req, res) => {
-  const rows = await query(
-    `SELECT * FROM drilling_parameters WHERE well_id = ? ORDER BY id DESC LIMIT ${Math.min(Number(req.query.limit ?? 400), 2000)}`, [req.params.id]);
+  const { rows } = await db.execute(sql`SELECT * FROM drilling_parameters WHERE well_id = ${req.params.id} ORDER BY id DESC LIMIT ${Math.min(Number(req.query.limit ?? 400), 2000)}`) as any;
   sendSuccess(res, rows.reverse());
 }));
 
 // ── Events ───────────────────────────────────────────────────
 router.get('/events', ah(async (req, res) => {
-  const c: string[] = ['e.verified = TRUE']; const p: any[] = [];
-  if (req.query.type) { c.push('e.event_type = ?'); p.push(req.query.type); }
-  if (req.query.formation) { c.push('e.formation_name = ?'); p.push(req.query.formation); }
-  if (req.query.field) { c.push('w.field_name = ?'); p.push(req.query.field); }
-  const rows = await query(
-    `SELECT e.*, w.name AS well_name, d.title AS doc_title FROM operational_events e JOIN wells w ON w.id = e.well_id
-     LEFT JOIN documents d ON d.id = e.source_document_id WHERE ${c.join(' AND ')} ORDER BY e.occurred_at DESC LIMIT 300`, p);
+  const typeCond = req.query.type ? sql` AND e.event_type = ${req.query.type as string}` : sql``;
+  const formCond = req.query.formation ? sql` AND e.formation_name = ${req.query.formation as string}` : sql``;
+  const fieldCond = req.query.field ? sql` AND w.field_name = ${req.query.field as string}` : sql``;
+  
+  const { rows } = await db.execute(sql`
+    SELECT e.*, w.name AS well_name, d.title AS doc_title 
+    FROM operational_events e 
+    JOIN wells w ON w.id = e.well_id
+    LEFT JOIN documents d ON d.id = e.source_document_id 
+    WHERE e.verified = TRUE ${typeCond} ${formCond} ${fieldCond} 
+    ORDER BY e.occurred_at DESC LIMIT 300
+  `) as any;
   sendSuccess(res, rows.map(wells.normalizeEvent));
 }));
 

@@ -5,12 +5,8 @@ const envSchema = z.object({
   PORT: z.string().default('5000').transform(Number),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 
-  // MySQL
-  MYSQL_HOST: z.string().min(1, 'MYSQL_HOST is required'),
-  MYSQL_PORT: z.string().default('3307').transform(Number),
-  MYSQL_USER: z.string().min(1, 'MYSQL_USER is required'),
-  MYSQL_PASSWORD: z.string().min(1, 'MYSQL_PASSWORD is required'),
-  MYSQL_DATABASE: z.string().min(1, 'MYSQL_DATABASE is required'),
+  // PostgreSQL — single connection string (e.g. postgresql://user:pass@host:5432/db)
+  DATABASE_URL: z.string().url('DATABASE_URL must be a valid PostgreSQL connection string'),
 
   // JWT
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
@@ -21,7 +17,7 @@ const envSchema = z.object({
   QDRANT_API_KEY: z.string().optional().default(''),
   QDRANT_COLLECTION_NAME: z.string().default('nwis_knowledge'),
 
-  // Local embeddings (downloaded once from Hugging Face, then cached)
+  // Local embeddings (downloaded once, then cached in node_modules/.cache)
   EMBEDDING_MODEL: z.string().default('Xenova/all-MiniLM-L6-v2'),
   EMBEDDING_DIMENSION: z.string().default('384').transform(Number),
 

@@ -4,7 +4,8 @@
  * everything to the well's Socket.IO room. The browser never produces drilling data.
  */
 import type { Server } from 'socket.io';
-import { query } from '../../config/db';
+import { db } from '../../config/db';
+import { sql } from 'drizzle-orm';
 import { LIVE_SCENARIOS } from '../../domain/hazardModel';
 import { EVENT_LABELS, RISK_TYPES, type RiskType } from '../../domain/taxonomy';
 import { FT_PER_M } from '../../domain/geo';
@@ -99,13 +100,12 @@ async function tick(rt: WellRuntime) {
   rt.lastRisk = risk;
   const wellId = rt.sim.wellId;
 
-  await query(
-    `INSERT INTO drilling_parameters (well_id, recorded_at, hole_depth_ft, bit_depth_ft, rig_state, rop_ft_hr, wob_klbs, rpm, torque_kftlb, spp_psi,
+  await db.execute(sql`
+    INSERT INTO drilling_parameters (well_id, recorded_at, hole_depth_ft, bit_depth_ft, rig_state, rop_ft_hr, wob_klbs, rpm, torque_kftlb, spp_psi,
        flow_in_gpm, flow_out_gpm, pit_volume_bbl, hook_load_klbs, mud_weight_ppg, ecd_ppg, total_gas_units)
-     VALUES (?, UTC_TIMESTAMP(3), ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [wellId, s.holeDepth, s.bitDepth, s.rigState, s.rop, s.wob, s.rpm, s.torque, s.spp, s.flowIn, s.flowOut, s.pit, s.hookLoad, s.mw, s.ecd, s.gas]
-  );
-  if (rt.tickCount % 10 === 0) await query(`UPDATE wells SET current_depth_ft = ? WHERE id = ?`, [s.holeDepth, wellId]);
+    VALUES (${wellId}, (NOW() AT TIME ZONE 'UTC'), ${s.holeDepth},${s.bitDepth},${s.rigState},${s.rop},${s.wob},${s.rpm},${s.torque},${s.spp},${s.flowIn},${s.flowOut},${s.pit},${s.hookLoad},${s.mw},${s.ecd},${s.gas})
+  `);
+  if (rt.tickCount % 10 === 0) await db.execute(sql`UPDATE wells SET current_depth_ft = ${s.holeDepth} WHERE id = ${wellId}`);
 
   io?.to(room(wellId)).emit('drilling:update', { wellId, sample: s, risk, running: true, speed: rt.sim.speed });
 
@@ -220,9 +220,9 @@ export async function controlLive(wellId: string, action: 'start' | 'pause' | 'r
     rt.lookaheadIssued.clear();
     rt.liveActive.clear();
     rt.lastRisk = null;
-    await query(`UPDATE alerts SET status = 'resolved' WHERE well_id = ? AND status IN ('active','acknowledged')`, [wellId]);
-    await query(`DELETE FROM drilling_parameters WHERE well_id = ?`, [wellId]);
-    await query(`UPDATE wells SET current_depth_ft = ? WHERE id = ?`, [rt.sim.holeDepth, wellId]);
+    await db.execute(sql`UPDATE alerts SET status = 'resolved' WHERE well_id = ${wellId} AND status IN ('active','acknowledged')`);
+    await db.execute(sql`DELETE FROM drilling_parameters WHERE well_id = ${wellId}`);
+    await db.execute(sql`UPDATE wells SET current_depth_ft = ${rt.sim.holeDepth} WHERE id = ${wellId}`);
   }
   const state = { wellId, running: rt.sim.running, speed: rt.sim.speed, radiusKm: rt.radiusKm };
   io?.to(room(wellId)).emit('sim:state', state);

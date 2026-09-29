@@ -2,7 +2,13 @@
  * Synthetic Upper Assam dataset (clearly fictional — for demo and development).
  * Deterministic: the same seed always produces the same wells and events.
  */
-import { query } from '../../src/config/db';
+import { pool } from '../../src/config/db';
+
+async function query(qs: string, params: any[] = []) {
+  let i = 1;
+  const pgQs = qs.replace(/\?/g, () => `$${i++}`);
+  return pool.query(pgQs, params);
+}
 import { FORMATIONS } from '../../src/domain/stratigraphy';
 import { EVENT_LABELS, type EventType } from '../../src/domain/taxonomy';
 import { minimumCurvature, mdAtTvd, positionAtMd, offsetLatLon, toLocalKm, FT_PER_M, type Position } from '../../src/domain/geo';
@@ -229,10 +235,10 @@ export async function seedSynthetic(): Promise<void> {
     }
 
     await query(
-      `INSERT INTO wells (id, name, field_name, block, pad, well_type, profile, latitude, longitude, location, kb_elevation_m,
+      `INSERT INTO wells (id, name, field_name, block, pad, well_type, profile, latitude, longitude, kb_elevation_m,
          total_depth_ft, planned_td_ft, status, spud_date, completion_date, total_npt_hours)
-       VALUES (?,?,?,?,?,?,?,?,?, ST_GeomFromText(?, 4326), ?,?,?,?,?,?,?)`,
-      [w.id, w.name, w.field, w.block, w.pad, w.type, w.profile, w.lat.toFixed(7), w.lon.toFixed(7), `POINT(${w.lat} ${w.lon})`,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [w.id, w.name, w.field, w.block, w.pad, w.type, w.profile, w.lat.toFixed(7), w.lon.toFixed(7),
         r1(uniform(95, 135)), r1(w.tdMd), r1(w.tdMd), 'completed', iso(w.spud), iso(completion), r1(wellNpt)]);
 
     for (const s of w.stations) {
@@ -307,10 +313,10 @@ export async function seedSynthetic(): Promise<void> {
     const currentDepth = start.top + sc.startRel * (next.top - start.top);
 
     await query(
-      `INSERT INTO wells (id, name, field_name, block, pad, well_type, profile, latitude, longitude, location, kb_elevation_m,
+      `INSERT INTO wells (id, name, field_name, block, pad, well_type, profile, latitude, longitude, kb_elevation_m,
          planned_td_ft, current_depth_ft, status, spud_date)
-       VALUES (?,?,?,?,NULL,'development','vertical',?,?, ST_GeomFromText(?, 4326), ?,?,?,'drilling',?)`,
-      [sc.wellId, sc.name, field.name, field.block, lat.toFixed(7), lon.toFixed(7), `POINT(${lat} ${lon})`, 112.4, r1(plannedTd), r1(currentDepth), '2026-08-29']);
+       VALUES (?,?,?,?,NULL,'development','vertical',?,?,?,?,?,'drilling',?)`,
+      [sc.wellId, sc.name, field.name, field.block, lat.toFixed(7), lon.toFixed(7), 112.4, r1(plannedTd), r1(currentDepth), '2026-08-29']);
     for (let md = 0; md <= plannedTd; md += 500) {
       await query(`INSERT INTO well_surveys (well_id, md_ft, inclination_deg, azimuth_deg, tvd_ft, north_ft, east_ft) VALUES (?,?,?,?,?,?,?)`, [sc.wellId, md, 0.4, 90, md, 0, 0]);
     }

@@ -1,0 +1,153 @@
+{
+  "model_name": "random_forest",
+  "model_version": "v1.0.2",
+  "training_date": "2026-09-22T06:11:14.337813+00:00",
+  "dataset": {
+    "path": "D:\\web\\SIH\\backend\\ml\\datasets\\drilling_readings.csv",
+    "rows_total": 3049,
+    "rows_train": 2360,
+    "rows_test": 689,
+    "wells_total": 12,
+    "wells_train": 9,
+    "wells_test": 3,
+    "split_strategy": "well_level_group_shuffle"
+  },
+  "features": [
+    "depth_ft",
+    "tvd_ft",
+    "rop_ft_hr",
+    "wob_klbs",
+    "rpm",
+    "torque_klb_ft",
+    "standpipe_pressure_psi",
+    "mud_weight_ppg",
+    "flow_rate_gpm",
+    "temperature_f",
+    "historical_hazards_in_radius",
+    "formation"
+  ],
+  "classes": [
+    "kick",
+    "mud_loss",
+    "normal",
+    "stuck_pipe",
+    "torque_spike"
+  ],
+  "medians": {
+    "depth_ft": 4108.856997373441,
+    "tvd_ft": 3977.3735734574902,
+    "rop_ft_hr": 34.66306442773498,
+    "wob_klbs": 27.839800581412867,
+    "rpm": 85.04187123186762,
+    "torque_klb_ft": 18.37744603582242,
+    "standpipe_pressure_psi": 2804.4927809948904,
+    "mud_weight_ppg": 10.77858022826912,
+    "flow_rate_gpm": 404.60646322565003,
+    "temperature_f": 131.74109867002016,
+    "historical_hazards_in_radius": 2.0
+  },
+  "metrics": {
+    "accuracy": 0.9884,
+    "f1_macro": 0.9651,
+    "precision_macro": 0.9836,
+    "recall_macro": 0.9494,
+    "per_class": {
+      "kick": {
+        "precision": 0.9767,
+        "recall": 0.9333,
+        "f1": 0.9545,
+        "support": 45
+      },
+      "mud_loss": {
+        "precision": 1.0,
+        "recall": 0.9615,
+        "f1": 0.9804,
+        "support": 26
+      },
+      "normal": {
+        "precision": 0.9913,
+        "recall": 0.9948,
+        "f1": 0.993,
+        "support": 573
+      },
+      "stuck_pipe": {
+        "precision": 0.95,
+        "recall": 1.0,
+        "f1": 0.9744,
+        "support": 38
+      },
+      "torque_spike": {
+        "precision": 1.0,
+        "recall": 0.8571,
+        "f1": 0.9231,
+        "support": 7
+      }
+    },
+    "confusion_matrix": {
+      "labels": [
+        "kick",
+        "mud_loss",
+        "normal",
+        "stuck_pipe",
+        "torque_spike"
+      ],
+      "matrix": [
+        [
+          42,
+          0,
+          3,
+          0,
+          0
+        ],
+        [
+          0,
+          25,
+          1,
+          0,
+          0
+        ],
+        [
+          1,
+          0,
+          570,
+          2,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          38,
+          0
+        ],
+        [
+          0,
+          0,
+          1,
+          0,
+          6
+        ]
+      ]
+    }
+  },
+  "feature_importance_model_derived": {
+    "num__standpipe_pressure_psi": 0.17,
+    "num__torque_klb_ft": 0.1638,
+    "num__mud_weight_ppg": 0.1163,
+    "num__rop_ft_hr": 0.1161,
+    "cat__formation_Alluvium": 0.0718,
+    "num__depth_ft": 0.0687,
+    "num__temperature_f": 0.0629,
+    "num__tvd_ft": 0.0624,
+    "cat__formation_Tipam Sandstone": 0.0528,
+    "cat__formation_Barail Sandstone": 0.0331,
+    "num__flow_rate_gpm": 0.032,
+    "num__wob_klbs": 0.0168,
+    "num__rpm": 0.0144,
+    "cat__formation_Girujan Clay": 0.0109,
+    "cat__formation_Kopili Shale": 0.0037,
+    "cat__formation_Sylhet Limestone": 0.0024,
+    "num__historical_hazards_in_radius": 0.0019,
+    "cat__formation_Langpar Formation": 0.0
+  }
+}

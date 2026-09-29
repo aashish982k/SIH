@@ -1,0 +1,2052 @@
+{
+  "id": "ffb97c4a-d1a6-41d9-8f46-30a7e7f128e6",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.alerts": {
+      "name": "alerts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "well_id": {
+          "name": "well_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "alert_kind_enum",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "risk_type": {
+          "name": "risk_type",
+          "type": "varchar(40)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "severity": {
+          "name": "severity",
+          "type": "alert_severity_enum",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "probability": {
+          "name": "probability",
+          "type": "numeric(5, 4)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bit_depth_ft": {
+          "name": "bit_depth_ft",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "zone_top_ft": {
+          "name": "zone_top_ft",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "zone_base_ft": {
+          "name": "zone_base_ft",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "formation_name": {
+          "name": "formation_name",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "title": {
+          "name": "title",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "message": {
+          "name": "message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "evidence": {
+          "name": "evidence",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "recommendations": {
+          "name": "recommendations",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "alert_status_enum",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "feedback": {
+          "name": "feedback",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "acknowledged_by": {
+          "name": "acknowledged_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "acknowledged_at": {
+          "name": "acknowledged_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_alert_well": {
+          "name": "idx_alert_well",
+          "columns": [
+            {
+              "expression": "well_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "alerts_well_id_wells_id_fk": {
+          "name": "alerts_well_id_wells_id_fk",
+          "tableFrom": "alerts",
+          "tableTo": "wells",
+          "columnsFrom": [
+            "well_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "alerts_acknowledged_by_users_id_fk": {
+          "name": "alerts_acknowledged_by_users_id_fk",
+          "tableFrom": "alerts",
+          "tableTo": "users",
+          "columnsFrom": [
+            "acknowledged_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.casing_sections": {
+      "name": "casing_sections",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "well_id": {
+          "name": "well_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "casing_type": {
+          "name": "casing_type",
+          "type": "casing_type_enum",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "size_label": {
+          "name": "size_label",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "outer_dia_in": {
+          "name": "outer_dia_in",
+          "type": "numeric(6, 3)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "grade": {
+          "name": "grade",
+          "type": "varchar(30)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "weight_lb_ft": {
+          "name": "weight_lb_ft",
+          "type": "numeric(7, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "top_md_ft": {
+          "name": "top_md_ft",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "shoe_md_ft": {
+          "name": "shoe_md_ft",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "idx_casing_well": {
+          "name": "idx_casing_well",
+          "columns": [
+            {
+              "expression": "well_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "casing_sections_well_id_wells_id_fk": {
+          "name": "casing_sections_well_id_wells_id_fk",
+          "tableFrom": "casing_sections",
+          "tableTo": "wells",
+          "columnsFrom": [
+            "well_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.cement_jobs": {
+      "name": "cement_jobs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "well_id": {
+          "name": "well_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "casing_section_id": {
+          "name": "casing_section_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "top_of_cement_ft": {
+          "name": "top_of_cement_ft",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "slurry_density_ppg": {
+          "name": "slurry_density_ppg",
+          "type": "numeric(6, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "returns_obtained": {
+          "name": "returns_obtained",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "result": {
+          "name": "result",
+          "type": "cement_result_enum",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "issues": {
+          "name": "issues",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "idx_cement_well": {
+          "name": "idx_cement_well",
+          "columns": [
+            {
+              "expression": "well_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "cement_jobs_well_id_wells_id_fk": {
+          "name": "cement_jobs_well_id_wells_id_fk",
+          "tableFrom": "cement_jobs",
+          "tableTo": "wells",
+          "columnsFrom": [
+            "well_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "cement_jobs_casing_section_id_casing_sections_id_fk": {
+          "name": "cement_jobs_casing_section_id_casing_sections_id_fk",
+          "tableFrom": "cement_jobs",
+          "tableTo": "casing_sections",
+          "columnsFrom": [
+            "casing_section_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.documents": {
+      "name": "documents",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "well_id": {
+          "name": "well_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "uploaded_by": {
+          "name": "uploaded_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "document_type": {
+          "name": "document_type",
+          "type": "doc_type_enum",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'other'"
+        },
+        "title": {
+          "name": "title",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "file_name": {
+          "name": "file_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "file_path": {
+          "name": "file_path",
+          "type": "varchar(500)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "file_size_bytes": {
+          "name": "file_size_bytes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "page_count": {
+          "name": "page_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "document_date": {
+          "name": "document_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "doc_status_enum",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'uploaded'"
+        },
+        "extraction_method": {
+          "name": "extraction_method",
+          "type": "varchar(40)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_message": {
+          "name": "error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_doc_well": {
+          "name": "idx_doc_well",
+          "columns": [
+            {
+              "expression": "well_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_doc_status": {
+          "name": "idx_doc_status",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "documents_well_id_wells_id_fk": {
+          "name": "documents_well_id_wells_id_fk",
+          "tableFrom": "documents",
+          "tableTo": "wells",
+          "columnsFrom": [
+            "well_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "documents_uploaded_by_users_id_fk": {
+          "name": "documents_uploaded_by_users_id_fk",
+          "tableFrom": "documents",
+          "tableTo": "users",
+          "columnsFrom": [
+            "uploaded_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.drilling_parameters": {
+      "name": "drilling_parameters",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "well_id": {
+          "name": "well_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "recorded_at": {
+          "name": "recorded_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "hole_depth_ft": {
+          "name": "hole_depth_ft",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bit_depth_ft": {
+          "name": "bit_depth_ft",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rig_state": {
+          "name": "rig_state",
+          "type": "rig_state_enum",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rop_ft_hr": {
+          "name": "rop_ft_hr",
+          "type": "numeric(8, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "wob_klbs": {
+          "name": "wob_klbs",
+          "type": "numeric(8, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rpm": {
+          "name": "rpm",
+          "type": "numeric(6, 1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "torque_kftlb": {
+          "name": "torque_kftlb",
+          "type": "numeric(8, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "spp_psi": {
+          "name": "spp_psi",
+          "type": "numeric(8, 1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "flow_in_gpm": {
+          "name": "flow_in_gpm",
+          "type": "numeric(8, 1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "flow_out_gpm": {
+          "name": "flow_out_gpm",
+          "type": "numeric(8, 1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pit_volume_bbl": {
+          "name": "pit_volume_bbl",
+          "type": "numeric(8, 1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hook_load_klbs": {
+          "name": "hook_load_klbs",
+          "type": "numeric(8, 1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mud_weight_ppg": {
+          "name": "mud_weight_ppg",
+          "type": "numeric(6, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ecd_ppg": {
+          "name": "ecd_ppg",
+          "type": "numeric(6, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "total_gas_units": {
+          "name": "total_gas_units",
+          "type": "numeric(8, 1)",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "idx_dp_well_time": {
+          "name": "idx_dp_well_time",
+          "columns": [
+            {
+              "expression": "well_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "recorded_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "drilling_parameters_well_id_wells_id_fk": {
+          "name": "drilling_parameters_well_id_wells_id_fk",
+          "tableFrom": "drilling_parameters",
+          "tableTo": "wells",
+          "columnsFrom": [
+            "well_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.extraction_items": {
+      "name": "extraction_items",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "document_id": {
+          "name": "document_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "item_type": {
+          "name": "item_type",
+          "type": "item_type_enum",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'event'"
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "confidence": {
+          "name": "confidence",
+          "type": "numeric(4, 3)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0.5'"
+        },
+        "source_page": {
+          "name": "source_page",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_quote": {
+          "name": "source_quote",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "item_status_enum",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "created_event_id": {
+          "name": "created_event_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reviewed_by": {
+          "name": "reviewed_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reviewed_at": {
+          "name": "reviewed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_extract_doc": {
+          "name": "idx_extract_doc",
+          "columns": [
+            {
+              "expression": "document_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "extraction_items_document_id_documents_id_fk": {
+          "name": "extraction_items_document_id_documents_id_fk",
+          "tableFrom": "extraction_items",
+          "tableTo": "documents",
+          "columnsFrom": [
+            "document_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "extraction_items_reviewed_by_users_id_fk": {
+          "name": "extraction_items_reviewed_by_users_id_fk",
+          "tableFrom": "extraction_items",
+          "tableTo": "users",
+          "columnsFrom": [
+            "reviewed_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.knowledge_chunks": {
+      "name": "knowledge_chunks",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "document_id": {
+          "name": "document_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "event_id": {
+          "name": "event_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "well_id": {
+          "name": "well_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_type": {
+          "name": "source_type",
+          "type": "chunk_source_enum",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "chunk_text": {
+          "name": "chunk_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "page": {
+          "name": "page",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "formation_name": {
+          "name": "formation_name",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "depth_ft": {
+          "name": "depth_ft",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "varchar(40)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "chunk_tsv": {
+          "name": "chunk_tsv",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_embedded": {
+          "name": "is_embedded",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_chunk_well": {
+          "name": "idx_chunk_well",
+          "columns": [
+            {
+              "expression": "well_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_chunk_embedded": {
+          "name": "idx_chunk_embedded",
+          "columns": [
+            {
+              "expression": "is_embedded",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "knowledge_chunks_document_id_documents_id_fk": {
+          "name": "knowledge_chunks_document_id_documents_id_fk",
+          "tableFrom": "knowledge_chunks",
+          "tableTo": "documents",
+          "columnsFrom": [
+            "document_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "knowledge_chunks_event_id_operational_events_id_fk": {
+          "name": "knowledge_chunks_event_id_operational_events_id_fk",
+          "tableFrom": "knowledge_chunks",
+          "tableTo": "operational_events",
+          "columnsFrom": [
+            "event_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "knowledge_chunks_well_id_wells_id_fk": {
+          "name": "knowledge_chunks_well_id_wells_id_fk",
+          "tableFrom": "knowledge_chunks",
+          "tableTo": "wells",
+          "columnsFrom": [
+            "well_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.mud_programs": {
+      "name": "mud_programs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "well_id": {
+          "name": "well_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "depth_from_ft": {
+          "name": "depth_from_ft",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "depth_to_ft": {
+          "name": "depth_to_ft",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mud_type": {
+          "name": "mud_type",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mud_weight_ppg": {
+          "name": "mud_weight_ppg",
+          "type": "numeric(6, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "total_loss_bbl": {
+          "name": "total_loss_bbl",
+          "type": "numeric(8, 1)",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "idx_mud_well": {
+          "name": "idx_mud_well",
+          "columns": [
+            {
+              "expression": "well_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "depth_from_ft",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "mud_programs_well_id_wells_id_fk": {
+          "name": "mud_programs_well_id_wells_id_fk",
+          "tableFrom": "mud_programs",
+          "tableTo": "wells",
+          "columnsFrom": [
+            "well_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.operational_events": {
+      "name": "operational_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "well_id": {
+          "name": "well_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "formation_name": {
+          "name": "formation_name",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "event_type_enum",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "severity": {
+          "name": "severity",
+          "type": "severity_enum",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'medium'"
+        },
+        "depth_md_ft": {
+          "name": "depth_md_ft",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "depth_tvd_ft": {
+          "name": "depth_tvd_ft",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cause": {
+          "name": "cause",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mitigation": {
+          "name": "mitigation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mitigation_key": {
+          "name": "mitigation_key",
+          "type": "varchar(60)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "outcome_rating": {
+          "name": "outcome_rating",
+          "type": "outcome_rating_enum",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lessons_learned": {
+          "name": "lessons_learned",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "npt_hours": {
+          "name": "npt_hours",
+          "type": "numeric(8, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_document_id": {
+          "name": "source_document_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_page": {
+          "name": "source_page",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "verified": {
+          "name": "verified",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_event_well": {
+          "name": "idx_event_well",
+          "columns": [
+            {
+              "expression": "well_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "depth_md_ft",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_event_type": {
+          "name": "idx_event_type",
+          "columns": [
+            {
+              "expression": "event_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_event_formation": {
+          "name": "idx_event_formation",
+          "columns": [
+            {
+              "expression": "formation_name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "operational_events_well_id_wells_id_fk": {
+          "name": "operational_events_well_id_wells_id_fk",
+          "tableFrom": "operational_events",
+          "tableTo": "wells",
+          "columnsFrom": [
+            "well_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "operational_events_source_document_id_documents_id_fk": {
+          "name": "operational_events_source_document_id_documents_id_fk",
+          "tableFrom": "operational_events",
+          "tableTo": "documents",
+          "columnsFrom": [
+            "source_document_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.users": {
+      "name": "users",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "varchar(254)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "password_hash": {
+          "name": "password_hash",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "role_enum",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'engineer'"
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_users_email": {
+          "name": "idx_users_email",
+          "columns": [
+            {
+              "expression": "email",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "users_email_uq": {
+          "name": "users_email_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "email"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.well_formations": {
+      "name": "well_formations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "well_id": {
+          "name": "well_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "formation_name": {
+          "name": "formation_name",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "seq": {
+          "name": "seq",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "top_md_ft": {
+          "name": "top_md_ft",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bottom_md_ft": {
+          "name": "bottom_md_ft",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "top_tvd_ft": {
+          "name": "top_tvd_ft",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bottom_tvd_ft": {
+          "name": "bottom_tvd_ft",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lithology": {
+          "name": "lithology",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_predicted": {
+          "name": "is_predicted",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        }
+      },
+      "indexes": {
+        "idx_formation_well": {
+          "name": "idx_formation_well",
+          "columns": [
+            {
+              "expression": "well_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "seq",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_formation_name": {
+          "name": "idx_formation_name",
+          "columns": [
+            {
+              "expression": "formation_name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "well_formations_well_id_wells_id_fk": {
+          "name": "well_formations_well_id_wells_id_fk",
+          "tableFrom": "well_formations",
+          "tableTo": "wells",
+          "columnsFrom": [
+            "well_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.well_surveys": {
+      "name": "well_surveys",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "well_id": {
+          "name": "well_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "md_ft": {
+          "name": "md_ft",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "inclination_deg": {
+          "name": "inclination_deg",
+          "type": "numeric(6, 3)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "azimuth_deg": {
+          "name": "azimuth_deg",
+          "type": "numeric(6, 3)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tvd_ft": {
+          "name": "tvd_ft",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "north_ft": {
+          "name": "north_ft",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "east_ft": {
+          "name": "east_ft",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "idx_survey_well_md": {
+          "name": "idx_survey_well_md",
+          "columns": [
+            {
+              "expression": "well_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "md_ft",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "well_surveys_well_id_wells_id_fk": {
+          "name": "well_surveys_well_id_wells_id_fk",
+          "tableFrom": "well_surveys",
+          "tableTo": "wells",
+          "columnsFrom": [
+            "well_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.wells": {
+      "name": "wells",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "field_name": {
+          "name": "field_name",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "block": {
+          "name": "block",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pad": {
+          "name": "pad",
+          "type": "varchar(40)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "operator": {
+          "name": "operator",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'Oil India Limited'"
+        },
+        "well_type": {
+          "name": "well_type",
+          "type": "well_type_enum",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'development'"
+        },
+        "profile": {
+          "name": "profile",
+          "type": "profile_enum",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'vertical'"
+        },
+        "latitude": {
+          "name": "latitude",
+          "type": "numeric(10, 7)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "longitude": {
+          "name": "longitude",
+          "type": "numeric(10, 7)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kb_elevation_m": {
+          "name": "kb_elevation_m",
+          "type": "numeric(8, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "total_depth_ft": {
+          "name": "total_depth_ft",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "planned_td_ft": {
+          "name": "planned_td_ft",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "current_depth_ft": {
+          "name": "current_depth_ft",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "well_status_enum",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'completed'"
+        },
+        "spud_date": {
+          "name": "spud_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "completion_date": {
+          "name": "completion_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "total_npt_hours": {
+          "name": "total_npt_hours",
+          "type": "numeric(8, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_wells_status": {
+          "name": "idx_wells_status",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_wells_field": {
+          "name": "idx_wells_field",
+          "columns": [
+            {
+              "expression": "field_name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_wells_lat_lon": {
+          "name": "idx_wells_lat_lon",
+          "columns": [
+            {
+              "expression": "latitude",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "longitude",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.alert_kind_enum": {
+      "name": "alert_kind_enum",
+      "schema": "public",
+      "values": [
+        "lookahead",
+        "live"
+      ]
+    },
+    "public.alert_severity_enum": {
+      "name": "alert_severity_enum",
+      "schema": "public",
+      "values": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
+    },
+    "public.alert_status_enum": {
+      "name": "alert_status_enum",
+      "schema": "public",
+      "values": [
+        "active",
+        "acknowledged",
+        "resolved",
+        "false_alarm"
+      ]
+    },
+    "public.casing_type_enum": {
+      "name": "casing_type_enum",
+      "schema": "public",
+      "values": [
+        "conductor",
+        "surface",
+        "intermediate",
+        "production",
+        "liner"
+      ]
+    },
+    "public.cement_result_enum": {
+      "name": "cement_result_enum",
+      "schema": "public",
+      "values": [
+        "good",
+        "acceptable",
+        "poor",
+        "failed"
+      ]
+    },
+    "public.chunk_source_enum": {
+      "name": "chunk_source_enum",
+      "schema": "public",
+      "values": [
+        "document",
+        "event"
+      ]
+    },
+    "public.doc_status_enum": {
+      "name": "doc_status_enum",
+      "schema": "public",
+      "values": [
+        "uploaded",
+        "processing",
+        "review",
+        "processed",
+        "failed"
+      ]
+    },
+    "public.doc_type_enum": {
+      "name": "doc_type_enum",
+      "schema": "public",
+      "values": [
+        "WCR",
+        "DDR",
+        "mud_log",
+        "completion_report",
+        "other"
+      ]
+    },
+    "public.event_type_enum": {
+      "name": "event_type_enum",
+      "schema": "public",
+      "values": [
+        "mud_loss",
+        "kick",
+        "stuck_pipe",
+        "tight_hole",
+        "overpressure",
+        "wellbore_instability",
+        "cementing_issue",
+        "fishing",
+        "other"
+      ]
+    },
+    "public.item_status_enum": {
+      "name": "item_status_enum",
+      "schema": "public",
+      "values": [
+        "pending",
+        "confirmed",
+        "rejected"
+      ]
+    },
+    "public.item_type_enum": {
+      "name": "item_type_enum",
+      "schema": "public",
+      "values": [
+        "event",
+        "formation_top",
+        "casing"
+      ]
+    },
+    "public.outcome_rating_enum": {
+      "name": "outcome_rating_enum",
+      "schema": "public",
+      "values": [
+        "resolved",
+        "partial",
+        "failed"
+      ]
+    },
+    "public.profile_enum": {
+      "name": "profile_enum",
+      "schema": "public",
+      "values": [
+        "vertical",
+        "deviated"
+      ]
+    },
+    "public.rig_state_enum": {
+      "name": "rig_state_enum",
+      "schema": "public",
+      "values": [
+        "drilling",
+        "connection",
+        "circulating",
+        "tripping",
+        "reaming"
+      ]
+    },
+    "public.role_enum": {
+      "name": "role_enum",
+      "schema": "public",
+      "values": [
+        "engineer",
+        "operator",
+        "administrator"
+      ]
+    },
+    "public.severity_enum": {
+      "name": "severity_enum",
+      "schema": "public",
+      "values": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
+    },
+    "public.well_status_enum": {
+      "name": "well_status_enum",
+      "schema": "public",
+      "values": [
+        "drilling",
+        "completed",
+        "suspended",
+        "abandoned"
+      ]
+    },
+    "public.well_type_enum": {
+      "name": "well_type_enum",
+      "schema": "public",
+      "values": [
+        "exploratory",
+        "appraisal",
+        "development"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
