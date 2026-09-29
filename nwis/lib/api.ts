@@ -9,6 +9,7 @@ export class ApiError extends Error {
   constructor(message: string, public status: number) { super(message); }
 }
 
+//Help me
 
 
 export async function api<T = any>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
