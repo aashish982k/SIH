@@ -45,7 +45,7 @@ async function embedGeminiBatch(texts: string[]): Promise<number[][]> {
     throw new Error(lastError);
   }
 
-  const data = await res.json();
+  const data: any = await res.json();
   return data.embeddings.map((e: any) => e.values);
 }
 
