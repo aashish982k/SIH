@@ -9,9 +9,9 @@ import { groqEnabled } from './services/groqService';
 import { embedOne } from './services/embeddingService';
 
 async function bootstrap(): Promise<void> {
-  console.log('🔌  Connecting to MySQL...');
+  console.log('🔌  Connecting to PostgreSQL...');
   await checkConnection();
-  console.log('✅  MySQL connected');
+  console.log('✅  PostgreSQL connected');
 
   try {
     await checkQdrantConnection();

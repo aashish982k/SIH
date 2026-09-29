@@ -2,7 +2,8 @@
 
 import { useApp } from './store';
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
+export const API_URL = process.env.NEXT_PUBLIC_API_URL 
+  || (process.env.NODE_ENV === 'production' ? 'https://sih-bj1s.onrender.com' : 'http://localhost:5000');
 
 export class ApiError extends Error {
   constructor(message: string, public status: number) { super(message); }
