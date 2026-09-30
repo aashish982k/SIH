@@ -16,6 +16,8 @@ const DEMO = [
 export default function LoginPage() {
   const router = useRouter();
   const setAuth = useApp((s) => s.setAuth);
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [name, setName] = useState('');
   const [email, setEmail] = useState(DEMO[0].email);
   const [password, setPassword] = useState(DEMO[0].password);
   const [error, setError] = useState('');
@@ -25,9 +27,15 @@ export default function LoginPage() {
     e.preventDefault();
     setBusy(true); setError('');
     try {
-      const { token, user } = await api<{ token: string; user: User }>('/auth/login', { method: 'POST', json: { email, password } });
-      setAuth(token, user);
-      router.replace('/');
+      if (mode === 'login') {
+        const { token, user } = await api<{ token: string; user: User }>('/auth/login', { method: 'POST', json: { email, password } });
+        setAuth(token, user);
+        router.replace('/');
+      } else {
+        const { token, user } = await api<{ token: string; user: User }>('/auth/register', { method: 'POST', json: { name, email, password } });
+        setAuth(token, user);
+        router.replace('/');
+      }
     } catch (err: any) {
       setError(err.message);
     } finally { setBusy(false); }
@@ -41,7 +49,7 @@ export default function LoginPage() {
           <div className="flex items-center gap-3"><Logo size={34} /><span className="font-display text-xl font-bold tracking-wide">NWIS</span></div>
           <div className="max-w-md">
             <div className="label-caps mb-3">Oil India Limited · alongside eRTMAC</div>
-            <h1 className="font-display text-[40px] font-bold leading-[1.05] text-balance">Every offset well’s experience, one step ahead of the bit.</h1>
+            <h1 className="font-display text-[40px] font-bold leading-[1.05] text-balance">Every offset well's experience, one step ahead of the bit.</h1>
             <p className="mt-4 text-[15px] leading-relaxed text-muted-fg">
               Offset wells within your radius, compared formation by formation. Look-ahead warnings before known trouble zones. Past fixes ranked by how often they worked.
             </p>
@@ -53,25 +61,93 @@ export default function LoginPage() {
       <div className="flex items-center justify-center p-6">
         <form onSubmit={submit} className="w-full max-w-sm">
           <div className="mb-8 flex items-center gap-3 lg:hidden"><Logo size={30} /><span className="font-display text-lg font-bold">NWIS</span></div>
-          <h2 className="font-display text-2xl font-semibold">Sign in</h2>
-          <p className="mt-1 text-[13.5px] text-muted-fg">Use your NWIS account.</p>
+
+          {/* Mode toggle */}
+          <div className="mb-6 flex rounded-xl border border-line bg-panel p-1">
+            <button
+              type="button"
+              onClick={() => { setMode('login'); setError(''); setEmail(DEMO[0].email); setPassword(DEMO[0].password); }}
+              className={`flex-1 rounded-lg py-1.5 text-[13px] font-medium transition-colors ${mode === 'login' ? 'bg-panel-2 text-fg shadow-sm' : 'text-muted-fg hover:text-fg'}`}
+            >
+              Sign in
+            </button>
+            <button
+              type="button"
+              onClick={() => { setMode('register'); setEmail(''); setPassword(''); setName(''); setError(''); }}
+              className={`flex-1 rounded-lg py-1.5 text-[13px] font-medium transition-colors ${mode === 'register' ? 'bg-panel-2 text-fg shadow-sm' : 'text-muted-fg hover:text-fg'}`}
+            >
+              Create account
+            </button>
+          </div>
+
+          <h2 className="font-display text-2xl font-semibold">
+            {mode === 'login' ? 'Welcome back' : 'Create your account'}
+          </h2>
+          <p className="mt-1 text-[13.5px] text-muted-fg">
+            {mode === 'login' ? 'Use your NWIS account.' : 'Join NWIS to access the platform.'}
+          </p>
+
           <div className="mt-6 grid gap-4">
-            <Field label="Email"><input id="email" className={inputCls} type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required /></Field>
-            <Field label="Password"><input id="password" className={inputCls} type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></Field>
+            {mode === 'register' && (
+              <Field label="Full name">
+                <input
+                  id="name"
+                  className={inputCls}
+                  type="text"
+                  autoComplete="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  placeholder="e.g. Rahul Sharma"
+                />
+              </Field>
+            )}
+            <Field label="Email">
+              <input
+                id="email"
+                className={inputCls}
+                type="email"
+                autoComplete="username"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </Field>
+            <Field label="Password">
+              <input
+                id="password"
+                className={inputCls}
+                type="password"
+                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </Field>
             {error && <p role="alert" className="text-[13px] text-[var(--r-crit)]">{error}</p>}
-            <Btn variant="primary" type="submit" loading={busy} className="h-10">Sign in</Btn>
+            <Btn variant="primary" type="submit" loading={busy} className="h-10">
+              {mode === 'login' ? 'Sign in' : 'Create account'}
+            </Btn>
           </div>
-          <div className="mt-8 rounded-xl border border-line bg-panel p-3">
-            <div className="label-caps mb-2">Demo accounts</div>
-            <div className="grid gap-1.5">
-              {DEMO.map((d) => (
-                <button key={d.email} type="button" onClick={() => { setEmail(d.email); setPassword(d.password); }}
-                  className="flex items-center justify-between rounded-lg px-2 py-1.5 text-left text-[13px] hover:bg-panel-2">
-                  <span>{d.label}</span><span className="readout text-[11.5px] text-faint">{d.email}</span>
-                </button>
-              ))}
+
+          {mode === 'login' && (
+            <div className="mt-8 rounded-xl border border-line bg-panel p-3">
+              <div className="label-caps mb-2">Demo accounts</div>
+              <div className="grid gap-1.5">
+                {DEMO.map((d) => (
+                  <button
+                    key={d.email}
+                    type="button"
+                    onClick={() => { setEmail(d.email); setPassword(d.password); }}
+                    className="flex items-center justify-between rounded-lg px-2 py-1.5 text-left text-[13px] hover:bg-panel-2"
+                  >
+                    <span>{d.label}</span>
+                    <span className="readout text-[11.5px] text-faint">{d.email}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </form>
       </div>
     </div>
