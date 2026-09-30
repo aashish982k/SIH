@@ -12,6 +12,7 @@ import { env } from '../config/env';
 import { haversineKm, offsetLatLon, positionAtMd, type Position } from '../domain/geo';
 import { FORMATIONS } from '../domain/stratigraphy';
 import { RISK_TYPES, EVENT_LABELS, MITIGATIONS, type RiskType } from '../domain/taxonomy';
+import { uuidList } from './knowledgeService';
 import { getEvents, getFormations, getSurveys, normalizeWell } from './wellService';
 
 const BIN_FT = 25;
@@ -222,7 +223,7 @@ export async function whatWorked(type: string, formation: string | null, offsetI
     const idsClause   = ids
       ? ids.length === 0
         ? sql`AND FALSE`
-        : sql`AND e.well_id = ANY(${ids}::uuid[])`
+        : sql`AND e.well_id = ANY(${uuidList(ids)})`
       : sql``;
     const { rows } = await db.execute(sql`
       SELECT e.*, w.name AS well_name

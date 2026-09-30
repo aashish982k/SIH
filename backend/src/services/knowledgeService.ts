@@ -9,6 +9,10 @@ import { groqChat, groqEnabled } from './groqService';
 import { EVENT_LABELS, type EventType } from '../domain/taxonomy';
 import { FT_PER_M } from '../domain/geo';
 
+/** Bind a JS array as a uuid[]; drizzle expands a bare array param into a row, which Postgres can't cast. */
+export const uuidList = (ids: string[]) =>
+  sql`ARRAY[${sql.join(ids.map((id) => sql`${id}::uuid`), sql`, `)}]`;
+
 export interface SearchFilters {
   wellIds?: string[];
   formation?: string;
@@ -89,7 +93,7 @@ export async function indexEvents(eventIds: string[]): Promise<void> {
     SELECT e.*, w.name AS well_name
     FROM operational_events e
     JOIN wells w ON w.id = e.well_id
-    WHERE e.id = ANY(${eventIds}::uuid[])
+    WHERE e.id = ANY(${uuidList(eventIds)})
   `) as any;
   await indexChunks(events.map((e: any) => ({
     event_id: e.id, well_id: e.well_id, document_id: e.source_document_id, source_type: 'event' as const,
@@ -142,7 +146,7 @@ export async function search(q: string, filters: SearchFilters = {}): Promise<{ 
   }
 
   // Keyword — PostgreSQL full-text search (tsvector GIN, replaces MySQL FULLTEXT)
-  const wellFilter   = filters.wellIds?.length ? sql`AND kc.well_id = ANY(${filters.wellIds}::uuid[])` : sql``;
+  const wellFilter   = filters.wellIds?.length ? sql`AND kc.well_id = ANY(${uuidList(filters.wellIds)})` : sql``;
   const fmFilter     = filters.formation ? sql`AND kc.formation_name = ${filters.formation}` : sql``;
   const evFilter     = filters.eventType ? sql`AND kc.event_type = ${filters.eventType}` : sql``;
   const dMinFilter   = filters.depthMin != null ? sql`AND kc.depth_ft >= ${filters.depthMin}` : sql``;
@@ -169,7 +173,7 @@ export async function search(q: string, filters: SearchFilters = {}): Promise<{ 
     LEFT JOIN wells w ON w.id = kc.well_id
     LEFT JOIN documents d ON d.id = kc.document_id
     LEFT JOIN operational_events e ON e.id = kc.event_id
-    WHERE kc.id = ANY(${top.map(([id]) => id)}::uuid[])
+    WHERE kc.id = ANY(${uuidList(top.map(([id]) => id))})
   `) as any;
   const byId = new Map(rows.map((r: any) => [r.id, r]));
   const maxScore = top[0][1].score;
