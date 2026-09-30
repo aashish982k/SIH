@@ -3,6 +3,8 @@ import { eq, inArray, and, sql } from 'drizzle-orm';
 import { db } from '../config/db';
 import { alerts, wells, users } from '../db/schema';
 
+
+
 export function normalizeAlert(a: any) {
   const parse = (v: any) => (v == null ? null : typeof v === 'string' ? JSON.parse(v) : v);
   return {
